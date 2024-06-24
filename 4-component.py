@@ -1,76 +1,44 @@
 import numpy as np
 import emcee
-from scipy.interpolate import griddata
-import scipy.optimize as op
 import matplotlib.pylab as pl
-import sys
+import matplotlib.pyplot as plt
+import multiprocessing
 import os
 from classes import *
 from constants import *
 from numba import njit
-import corner
-import logging
 from tqdm import tqdm
 
 # calculates the rms noise in a given spectrum, should be robust to interloping lines, etc.
-"""
-def calc_noise_std(spectrum):
-    dummy_ints = np.copy(spectrum)
-    noise = np.copy(spectrum)
+def calc_noise_std(intensity, threshold=3.5):
+    dummy_ints = np.copy(intensity)
+    noise = np.copy(intensity)
     dummy_mean = np.nanmean(dummy_ints)
     dummy_std = np.nanstd(dummy_ints)
 
-    def mask_outliers(data, threshold):
-        for chan in np.where((data > threshold) | (data < -threshold))[0]:
-            data[max(0, chan-5):min(len(data), chan+5)] = np.nan
-
-    mask_outliers(dummy_ints, dummy_std)  # Less aggressive initial masking
-    if np.count_nonzero(~np.isnan(noise)) < 10:
-        return dummy_mean, max(dummy_std, 0.001)  # Minimal std if too few points
-
-    noise_std = np.nanstd(np.real(noise))
-    mask_outliers(noise, 2.5 * noise_std)  # Tighter threshold and range
-    if np.count_nonzero(~np.isnan(noise)) < 10:
-        return np.nanmean(noise), max(noise_std, 0.001)
-
-    noise_std = np.nanstd(np.real(noise))
-    mask_outliers(noise, 2.5 * noise_std)
-    if np.count_nonzero(~np.isnan(noise)) < 10:
-        return np.nanmean(noise), max(noise_std, 0.001)
-
-    return np.nanmean(noise), np.nanstd(np.real(noise))
-"""
-
-def calc_noise_std(spectrum):
-    dummy_ints = np.copy(spectrum)
-    noise = np.copy(spectrum)
-    dummy_mean = np.nanmean(dummy_ints)
-    dummy_std = np.nanstd(dummy_ints)
-
-    if np.isnan(dummy_std) or dummy_std == 0:
-        return dummy_mean, 0.001  # Prevent division by zero or invalid std computation
-
-    # Use a function to mask outliers
-    def mask_outliers(data, threshold):
-        for chan in np.where((data < (-threshold)) | (data > threshold))[0]:
-            data[max(0, chan-5):min(len(data), chan+5)] = np.nan  # Reduced range to ±5
-
-    # First pass with less aggressive threshold
-    mask_outliers(noise, dummy_std)
-    if np.isnan(np.nanstd(noise)) or np.count_nonzero(~np.isnan(noise)) < 10:
-        return dummy_mean, max(dummy_std, 0.001)  # Use original std if too many NaNs
-
-    # Recalculate mean and std after initial masking
+    # repeats 3 times to make sure to avoid any interloping lines
+    for chan in np.where(dummy_ints-dummy_mean < (-dummy_std*threshold))[0]:
+        noise[chan-10:chan+10] = np.nan
+    for chan in np.where(dummy_ints-dummy_mean > (dummy_std*threshold))[0]:
+        noise[chan-10:chan+10] = np.nan
     noise_mean = np.nanmean(noise)
     noise_std = np.nanstd(np.real(noise))
 
-    # Second pass with updated std
-    mask_outliers(noise, 3.5 * noise_std)
-    if np.isnan(np.nanstd(noise)) or np.count_nonzero(~np.isnan(noise)) < 10:
-        return noise_mean, max(noise_std, 0.001)  # Prevent invalid computation
+    for chan in np.where(dummy_ints-noise_mean < (-noise_std*threshold))[0]:
+        noise[chan-10:chan+10] = np.nan
+    for chan in np.where(dummy_ints-noise_mean > (noise_std*threshold))[0]:
+        noise[chan-10:chan+10] = np.nan
+    noise_mean = np.nanmean(noise)
+    noise_std = np.nanstd(np.real(noise))
 
-    # Final mean and std computation
-    return np.nanmean(noise), np.nanstd(np.real(noise))
+    for chan in np.where(dummy_ints-noise_mean < (-noise_std*threshold))[0]:
+        noise[chan-10:chan+10] = np.nan
+    for chan in np.where(dummy_ints-noise_mean > (noise_std*threshold))[0]:
+        noise[chan-10:chan+10] = np.nan
+    noise_mean = np.nanmean(noise)
+    noise_std = np.nanstd(np.real(noise))
+
+    return noise_mean, noise_std
 
 # reads in the data and returns the data which has coverage of a given species (from the simulated intensities)
 def read_file(filename, restfreqs, int_sim, oldformat=False, shift=0.0, GHz=False, plot=False, block_interlopers=True):
@@ -100,8 +68,8 @@ def read_file(filename, restfreqs, int_sim, oldformat=False, shift=0.0, GHz=Fals
                 if block_interlopers and (np.max(intensity[locs]) > 6*noise_std):
                     print("interloping line detected " + str(rf))
                     if plot:
-                        pl.plot(freqs[locs], intensity[locs])
-                        pl.show()
+                        plt.plot(freqs[locs], intensity[locs])
+                        plt.show()
                 else:
                     covered_trans.append(i)
                     print("Found_line at: " + str(rf))
@@ -116,8 +84,8 @@ def read_file(filename, restfreqs, int_sim, oldformat=False, shift=0.0, GHz=Fals
                     print(np.sqrt(noise_std**2 + (intensity[locs]*0.1)**2))
 
                 if plot:
-                    pl.plot(freqs[locs], intensity[locs])
-                    pl.show()
+                    plt.plot(freqs[locs], intensity[locs])
+                    plt.show()
             else:
                 print("No data covering " + str(rf))
     
@@ -239,7 +207,7 @@ def lnprior(theta, prior_stds, prior_means):
     s13 = m13*0.3
 
     # set custom priors and limits here
-    if (0. < source_size1 < 400) and (0. < source_size2 < 400) and (0. < source_size3 < 400) and (0. < source_size4 < 400) and (0. < Ncol1 < 10**16.) and (0. < Ncol2 < 10**16.) and (0. < Ncol3 < 10**16.) and (0. < Ncol4 < 10**16.) and (vlsr1 < (vlsr2-0.05)) and (vlsr2 < (vlsr3-0.05)) and (vlsr3 < (vlsr4-0.05)) and (vlsr2 < (vlsr1+0.3)) and (vlsr3 < (vlsr2+0.2)) and (vlsr4 < (vlsr3+0.2)) and dV < 0.3:
+    if (0. < source_size1 < 200) and (0. < source_size2 < 200) and (0. < source_size3 < 200) and (0. < source_size4 < 200) and (0. < Ncol1 < 10**16.) and (0. < Ncol2 < 10**16.) and (0. < Ncol3 < 10**16.) and (0. < Ncol4 < 10**16.) and (vlsr1 < (vlsr2-0.05)) and (vlsr2 < (vlsr3-0.05)) and (vlsr3 < (vlsr4-0.05)) and (vlsr2 < (vlsr1+0.3)) and (vlsr3 < (vlsr2+0.3)) and (vlsr4 < (vlsr3+0.3)) and dV < 0.3:
         
         p0 = np.log(1.0/(np.sqrt(2*np.pi)*s0))-0.5*(source_size1-m0)**2/s0**2
         p1 = np.log(1.0/(np.sqrt(2*np.pi)*s1))-0.5*(source_size2-m1)**2/s1**2
@@ -259,14 +227,11 @@ def lnprior(theta, prior_stds, prior_means):
 
     return -np.inf
 
-
 def lnprob(theta, datagrid, mol_cat, prior_stds, prior_means):
     lp = lnprior(theta, prior_stds, prior_means)
     if not np.isfinite(lp):
         return -np.inf
     return lp + lnlike(theta, datagrid, mol_cat)
-
-    # TODO: try reverting noise_std, but changing this to match emcee docs @ en/stable/user/blobs
 
 
 def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, restart=False):
@@ -276,44 +241,82 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, restart
     ndim, nwalkers = 14, 200
     mol_cat = MolCat(mol_name, catalogue) 
 
+    # source_size1, source_size2, source_size3, source_size4, Ncol1, Ncol2, Ncol3, Ncol4, Tex, vlsr1, vlsr2, vlsr3, vlsr4, dV 
     # initial = [99, 65, 265, 262, 1.98e12, 6.22e12, 2.92e12, 4.88e12, 6.1, 5.595, 5.764, 5.886, 6.017, 0.121] # BENZONITRILE
     initial = [37, 25, 56, 22, 2.47e12, 11.19e12, 2.20e12, 5.64e12, 6.7, 5.624, 5.790, 5.910, 6.033, 0.117] # HC9N
     # initial = [42.8, 24.3, 47.9, 21.5, 5.8e13, 9.5e13, 4.e13, 1.06e14, 7.7, 5.603, 5.745, 5.873, 6.024, 0.1568] # LOOMIS
 
-
     prior_path = os.path.join(fit_folder, mol_name, "chain.npy")
     if restart:
-        print(f"RESTART SET AS TRUE, LOADING INITIALS FOR {mol_name}")
+        print("RESTART SET AS TRUE, LOADING INITIALS FROM CHAIN (HC9N)")
         if os.path.exists(prior_path):
             psamples = np.load(prior_path)[:,-200:,:].reshape(-1, ndim).T
             prior_stds = np.std(psamples, axis=1)
             prior_means = np.mean(psamples, axis=1)
             initial = np.percentile(psamples, 50, axis=1)
         else:
-            print(f"No prior chain file found for {mol_name}, using hardcoded BENZONITRILE initial values.")
-            prior_stds = np.array([110.5, 16.5, 92, 102, 5.2e11, 6.15e11, 2.45e11, 2.4e11, 0.3, 0.0065, 0.0035, 0.0065, 0.0025, 0.0005])
-            prior_means = initial
+            raise FileNotFoundError(f"No prior chain file found for {mol_name}, unable to proceed.")
+        
     else:
         print(f"USING HARDCODED MCMC PRIORS FROM HC9N")
         prior_means = initial
         prior_stds = [2.5, 2, 6.5, 2, 0.30e12, 1.75e12, 0.265e12, 1.185e12, 0.1, 0.0015, 0.001, 0.0035, 0.002, 0.002]
-        # prior_stds = [
-        #     110.5, 16.5, 92, 102,  # Source sizes
-        #     5.2e11, 6.15e11, 2.45e11, 2.4e11,  # Column densities
-        #     0.3,  # Excitation temperature
-        #     0.0065, 0.0035, 0.0065, 0.0025,  # LSR velocities
-        #     0.0005  # Delta V
-        # ]
 
-    pos = [initial + np.random.randn(ndim) * 0.1 for i in range(nwalkers)]
+    pos = [initial + np.array([1.e-1,1.e-1,1.e-1,1.e-1, 1.e10,1.e10,1.e10,1.e10, 1.e-3, 1.e-3,1.e-3,1.e-3,1.e-3, 1.e-3])*np.random.randn(ndim) for i in range(nwalkers)]
     
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(datagrid, mol_cat, prior_stds, prior_means), threads=4)
+    def is_within_bounds(params):
+        source_size1, source_size2, source_size3, source_size4, Ncol1, Ncol2, Ncol3, Ncol4, Tex, vlsr1, vlsr2, vlsr3, vlsr4, dV = params
+        if not (0. < source_size1 < 200):
+            return False, f"source_size1 out of bounds: {source_size1}"
+        if not (0. < source_size2 < 200):
+            return False, f"source_size2 out of bounds: {source_size2}"
+        if not (0. < source_size3 < 200):
+            return False, f"source_size3 out of bounds: {source_size3}"
+        if not (0. < source_size4 < 200):
+            return False, f"source_size4 out of bounds: {source_size4}"
+        if not (0. < Ncol1 < 10**16):
+            return False, f"Ncol1 out of bounds: {Ncol1}"
+        if not (0. < Ncol2 < 10**16):
+            return False, f"Ncol2 out of bounds: {Ncol2}"
+        if not (0. < Ncol3 < 10**16):
+            return False, f"Ncol3 out of bounds: {Ncol3}"
+        if not (0. < Ncol4 < 10**16):
+            return False, f"Ncol4 out of bounds: {Ncol4}"
+        if not (vlsr1 < (vlsr2 - 0.05)):
+            return False, f"vlsr1 not less than vlsr2 - 0.05: {vlsr1} >= {vlsr2 - 0.05}"
+        if not (vlsr2 < (vlsr3 - 0.05)):
+            return False, f"vlsr2 not less than vlsr3 - 0.05: {vlsr2} >= {vlsr3 - 0.05}"
+        if not (vlsr3 < (vlsr4 - 0.05)):
+            return False, f"vlsr3 not less than vlsr4 - 0.05: {vlsr3} >= {vlsr4 - 0.05}"
+        if not (vlsr2 < (vlsr1 + 0.3)):
+            return False, f"vlsr2 not less than vlsr1 + 0.3: {vlsr2} >= {vlsr1 + 0.3}"
+        if not (vlsr3 < (vlsr2 + 0.3)):
+            return False, f"vlsr3 not less than vlsr2 + 0.3: {vlsr3} >= {vlsr2 + 0.3}"
+        if not (vlsr4 < (vlsr3 + 0.3)):
+            return False, f"vlsr4 not less than vlsr3 + 0.3: {vlsr4} >= {vlsr3 + 0.3}"
+        if not (dV < 0.3):
+            return False, f"dV out of bounds: {dV}"
+        return True, "Within bounds"
 
-    for i in tqdm(range(nruns), desc=f"MCMC Sampling for {mol_name}"):
-        sampler.run_mcmc(pos, 1)
-        file_name = os.path.join(fit_folder, mol_name, "chain.npy")
-        np.save(file_name, sampler.chain)
-        pos = sampler.chain[:, -1, :]
+    # Check how many walkers are within the bounds and print their positions
+    valid_walkers_info = [is_within_bounds(walker) for walker in pos]
+    num_valid_walkers = sum(1 for valid, _ in valid_walkers_info if valid)
+    print(f"Number of walkers within bounds: {num_valid_walkers}/{nwalkers}")
+    for i, (walker, (valid, info)) in enumerate(zip(pos, valid_walkers_info)):
+        if not valid:
+            print(f"Walker {i}: {walker}, Valid: {valid}, Info: {info}")
+    
+    ncores = multiprocessing.cpu_count()
+
+    # Set up the sampler with a multiprocessing pool
+    with multiprocessing.Pool(ncores) as pool:
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(datagrid, mol_cat, prior_stds, prior_means), pool=pool)
+
+        for i in tqdm(range(nruns), desc=f"MCMC Sampling for {mol_name}"):
+            sampler.run_mcmc(pos, 1)
+            file_name = os.path.join(fit_folder, mol_name, "chain.npy")
+            np.save(file_name, sampler.chain)
+            pos = sampler.chain[:, -1, :]
 
     return
 
@@ -374,7 +377,7 @@ if __name__ == "__main__":
         'data_path': os.path.join(base_dir, 'GOTHAM-data', 'hc9n_hfs_chunks.npy'),
         'block_interlopers': True,
         'nruns': 20000,
-        'restart': False,
+        'restart': True,
         'prior_path': os.path.join(base_dir, 'fit_results', 'hc9n_hfs', 'chain.npy'),
     }
 
@@ -399,7 +402,8 @@ if __name__ == "__main__":
     param_labels = [
         "Source Size 1", "Source Size 2", "Source Size 3", "Source Size 4",
         "Column Density 1", "Column Density 2", "Column Density 3", "Column Density 4",
-        "Excitation Temperature", "Velocity LSR 1", "Velocity LSR 2", "Velocity LSR 3", "Velocity LSR 4",
+        "Excitation Temperature", 
+        "Velocity LSR 1", "Velocity LSR 2", "Velocity LSR 3", "Velocity LSR 4",
         "Delta V"
     ]
 
