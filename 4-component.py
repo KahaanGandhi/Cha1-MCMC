@@ -238,7 +238,7 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, restart
     print(f"Fitting column densities for {mol_name}")
     datagrid = np.load(datafile, allow_pickle=True)
 
-    ndim, nwalkers = 14, 200
+    ndim, nwalkers = 14, 100
     mol_cat = MolCat(mol_name, catalogue) 
 
     # source_size1, source_size2, source_size3, source_size4, Ncol1, Ncol2, Ncol3, Ncol4, Tex, vlsr1, vlsr2, vlsr3, vlsr4, dV 
@@ -376,8 +376,8 @@ if __name__ == "__main__":
         'cat_folder': os.path.join(base_dir, 'GOTHAM-catalogs'),
         'data_path': os.path.join(base_dir, 'GOTHAM-data', 'hc9n_hfs_chunks.npy'),
         'block_interlopers': True,
-        'nruns': 20000,
-        'restart': True,
+        'nruns': 10000,
+        'restart': False,
         'prior_path': os.path.join(base_dir, 'fit_results', 'hc9n_hfs', 'chain.npy'),
     }
 
