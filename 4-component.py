@@ -8,36 +8,6 @@ from constants import *
 from numba import njit
 from tqdm import tqdm
 
-# calculates the rms noise in a given spectrum, should be robust to interloping lines, etc.
-def calc_noise_std(spectrum):
-    dummy_ints = np.copy(spectrum)
-    noise = np.copy(spectrum)
-    dummy_mean = np.nanmean(dummy_ints)
-    dummy_std = np.nanstd(dummy_ints)
-
-    # repeats 3 times to make sure to avoid any interloping lines
-    for chan in np.where(dummy_ints < (-dummy_std*1.))[0]:
-        noise[chan-10:chan+10] = np.nan
-    for chan in np.where(dummy_ints > (dummy_std*1.))[0]:
-        noise[chan-10:chan+10] = np.nan
-    noise_mean = np.nanmean(noise)
-    noise_std = np.nanstd(np.real(noise))
-
-    for chan in np.where(dummy_ints < (-noise_std*3.5))[0]:
-        noise[chan-10:chan+10] = np.nan
-    for chan in np.where(dummy_ints > (noise_std*3.5))[0]:
-        noise[chan-10:chan+10] = np.nan
-    noise_mean = np.nanmean(noise)
-    noise_std = np.nanstd(np.real(noise))
-
-    for chan in np.where(dummy_ints < (-dummy_std*3.5))[0]:
-        noise[chan-10:chan+10] = np.nan
-    for chan in np.where(dummy_ints > (dummy_std*3.5))[0]:
-        noise[chan-10:chan+10] = np.nan
-    noise_mean = np.nanmean(noise)
-    noise_std = np.nanstd(np.real(noise))
-
-    return noise_mean, noise_std
 
 # Calculates local RMS noise in a given spectrum by iteratively masking outliers. 3.5σ default, 6σ for weaker species. 
 def calc_noise_std(intensity, threshold=3.5):
