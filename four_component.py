@@ -248,7 +248,8 @@ def lnprob(theta, datagrid, mol_cat, prior_stds, prior_means):
     return lp + lnlike(theta, datagrid, mol_cat)
 
 
-def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_path, restart=True, template_run=False):
+# Conduct Markov Chain Monte Carlo (MCMC) inference using emcee's ensemble sampler
+def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_path, restart=True, template_run=True):
     print(f"Fitting column densities for {mol_name}. Restart = {restart}.")
     ndim, nwalkers = 14, 128
     if not os.path.exists(datafile):
@@ -295,7 +296,7 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
     with Pool() as pool:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(datagrid, mol_cat, prior_stds, prior_means), pool=pool)
 
-        # Perform MCMC sampling
+        # Perform affine invariant MCMC sampling with Gelman-Rubin convergence
         for i in tqdm(range(nruns), desc=f"MCMC Sampling for {mol_name}"):
             sampler.run_mcmc(pos, 1)
             file_name = os.path.join(fit_folder, mol_name, "chain.npy")
@@ -343,16 +344,16 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
 if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-    # Define the new relative paths
     input_dict = {
-        'mol_name': 'hc11n',
+        'mol_name': 'hc9n_hfs',
         'fit_folder': os.path.join(BASE_DIR, 'fit_results'),
         'cat_folder': os.path.join(BASE_DIR, 'GOTHAM-catalogs'),
-        'data_path': os.path.join(BASE_DIR, 'GOTHAM-data', 'hc11n_chunks.npy'),
+        'data_path': os.path.join(BASE_DIR, 'GOTHAM-data', 'hc9n_hfs_chunks.npy'),
         'block_interlopers': True,
         'nruns': 10000,
         'restart': True,
         'prior_path': os.path.join(BASE_DIR, 'fit_results', 'hc9n_hfs', 'chain.npy'),
+        'template_run': True
     }
 
     datafile, catalogue = init_setup(
@@ -370,14 +371,15 @@ if __name__ == "__main__":
         nruns=input_dict['nruns'],
         mol_name=input_dict['mol_name'],
         prior_path=input_dict['prior_path'],
-        restart=input_dict['restart']
+        restart=input_dict['restart'],
+        template_run=input_dict['template_run']
     )
     
     param_labels = [
         'Source Size #1 [″]', 'Source Size #2 [″]', 'Source Size #3 [″]', 'Source Size #4 [″]',
-        'N_col #1 [cm⁻²]', 'N_col #2 [cm⁻²]', 'N_col #3 [cm⁻²]', 'N_col #4 [cm⁻²]',
-        'Excitation Temperature',
-        'v_LSRK #1 [km s⁻¹]', 'v_LSRK #2 [km s⁻¹]', 'v_LSRK #3 [km s⁻¹]', 'v_LSRK #4 [km s⁻¹]',
+        'Ncol #1 [cm⁻²]', 'Ncol #2 [cm⁻²]', 'Ncol #3 [cm⁻²]', 'Ncol #4 [cm⁻²]',
+        'Tex [K]',
+        'vLSRK #1 [km s⁻¹]', 'vLSRK #2 [km s⁻¹]', 'vLSRK #3 [km s⁻¹]', 'vLSRK #4 [km s⁻¹]',
         'dV [km s⁻¹]'
     ]
 
@@ -387,4 +389,3 @@ if __name__ == "__main__":
         plot_results(CHAIN_PATH, param_labels)
     else:
         print(f"Chain file not found at {CHAIN_PATH}.")
-        

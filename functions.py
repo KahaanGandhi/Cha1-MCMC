@@ -3,6 +3,7 @@ from numpy import exp as exp
 import time as tm
 import corner
 import matplotlib.pylab as pl
+import matplotlib.pyplot as plt
 from constants import *
 
 
@@ -527,6 +528,12 @@ def apply_beam(frequency, intensity, source_size, dish_size):
     return intensity_diluted
 
 def plot_results(chain_path, param_labels):
+    
+    plt.rcParams.update({
+        "text.usetex": False,
+        "font.family": "DejaVu Sans"
+    })
+    
     # Load the MCMC chain
     chain = np.load(chain_path)
     
@@ -548,10 +555,15 @@ def plot_results(chain_path, param_labels):
         ax.plot(chain[:, :, i].T, color="k", alpha=0.3)  # Transpose for proper plotting
         ax.set_title(f'Parameter {i+1}: {param_labels[i]}')
     axes[-1].set_xlabel("Step Number")
+    plt.tight_layout()
     fig.savefig(f"{chain_path[:-4]}_trace.png")  # Save the figure
 
-    # Print parameter estimates
-    for i in range(samples.shape[1]):
+    format_value = lambda x: f"{x:.2e}" if abs(x) < 1e-3 or abs(x) > 1e3 else f"{x:.5f}"
+    print("\nParameter Estimates:")
+    for i, label in enumerate(param_labels):
         mcmc = np.percentile(samples[:, i], [16, 50, 84])
         q = np.diff(mcmc)
-        print(f'{param_labels[i]}: {mcmc[1]:.5f} [-{q[0]:.5f} +{q[1]:.5f}]')
+        median = format_value(mcmc[1])
+        lower = format_value(q[0])
+        upper = format_value(q[1])
+        print(f'{label}: {median} [-{lower} +{upper}]')
