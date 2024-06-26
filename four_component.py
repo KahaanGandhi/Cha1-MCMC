@@ -1,13 +1,12 @@
 import numpy as np
 import emcee
 import matplotlib.pyplot as plt
-import multiprocessing
 import os
-from classes import *
-from constants import *
+from multiprocessing import Pool
 from numba import njit
 from tqdm import tqdm
-
+from classes import *
+from constants import *
 
 # Calculates local RMS noise in a given spectrum by iteratively masking outliers. 3.5σ default, 6σ for weaker species. 
 def calc_noise_std(intensity, threshold=3.5):
@@ -157,18 +156,20 @@ def make_model(freqs1, freqs2, freqs3, freqs4, ints1, ints2, ints3, ints4, ss1, 
     return curr_model
 
 
-
+# Log likelihood for MCMC, evaluates how well a set of model parameters fit the observed data
 def lnlike(theta, datagrid, mol_cat):
     tot_lnlike = 0.
     yerrs = datagrid[2]
     line_ids = datagrid[3]
     source_size1, source_size2, source_size3, source_size4, Ncol1, Ncol2, Ncol3, Ncol4, Tex, vlsr1, vlsr2, vlsr3, vlsr4, dV = theta
 
+    # Simulate spectral lines for each compononent using current parameter values
     freqs1, ints1, taus1 = predict_intensities(source_size1, Ncol1, Tex, dV, mol_cat)
     freqs2, ints2, taus2 = predict_intensities(source_size2, Ncol2, Tex, dV, mol_cat)
     freqs3, ints3, taus3 = predict_intensities(source_size3, Ncol3, Tex, dV, mol_cat)
     freqs4, ints4, taus4 = predict_intensities(source_size4, Ncol4, Tex, dV, mol_cat)
 
+    # Select relavent data indices from the predicted spectra
     freqs1 = np.array(freqs1)[line_ids]
     freqs2 = np.array(freqs2)[line_ids]
     freqs3 = np.array(freqs3)[line_ids]
@@ -184,47 +185,62 @@ def lnlike(theta, datagrid, mol_cat):
     ints3 = np.array(ints3)[line_ids]
     ints4 = np.array(ints4)[line_ids]
 
+    # Construct composite molecular line emission model
     curr_model = make_model(freqs1, freqs2, freqs3, freqs4, taus1, taus2, taus3, taus4, source_size1, source_size2, source_size3, source_size4, datagrid[0], datagrid[1], vlsr1, vlsr2, vlsr3, vlsr4, dV, Tex)
-
-    inv_sigma2 = 1.0/(yerrs**2)
+    inv_sigma2 = 1.0/(yerrs**2)  # Inverse of variance
+    
+    # Compute negative log-likelihood as sum of squared differences between observed and simulated spectra, weighted by inverse variance
     tot_lnlike = np.sum((datagrid[1] - curr_model)**2*inv_sigma2 - np.log(inv_sigma2))
+    
     return -0.5*tot_lnlike
 
+# Apply physical priors (e.g. positivity constraints) and limits. For TMC-1, impose sequential order on velocities
+def is_within_bounds(theta):
+    source_size1, source_size2, source_size3, source_size4, Ncol1, Ncol2, Ncol3, Ncol4, Tex, vlsr1, vlsr2, vlsr3, vlsr4, dV = theta
+    
+    return (
+        0. < source_size1 < 200 and 0. < source_size2 < 200 and 0. < source_size3 < 200 and 0. < source_size4 < 200 and
+        0. < Ncol1 < 10**16. and 0. < Ncol2 < 10**16. and 0. < Ncol3 < 10**16. and 0. < Ncol4 < 10**16. and
+        vlsr1 < (vlsr2 - 0.05) and vlsr2 < (vlsr3 - 0.05) and vlsr3 < (vlsr4 - 0.05) and
+        vlsr2 < (vlsr1 + 0.3) and vlsr3 < (vlsr2 + 0.3) and vlsr4 < (vlsr3 + 0.3) and
+        dV < 0.3 and 2.7 < Tex
+    )
 
-
+# Log-prior probability for MCMC, ensuring that a set of model parameters falls within physical and statistical constraints
 def lnprior(theta, prior_stds, prior_means):
+    # Unpack parameters and prior distributions
     source_size1, source_size2, source_size3, source_size4, Ncol1, Ncol2, Ncol3, Ncol4, Tex, vlsr1, vlsr2, vlsr3, vlsr4, dV = theta
     s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13 = prior_stds
     m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13 = prior_means
 
-    # in several cases the standard deviations on some of the parameters are too restrictive (e.g. vlsr and dV). Relaxing slightly
+    # Adjust standard deviations for velocity-related parameters to be less restrictive (relaxing vlsr and dV)
     s9 = m13*0.8
     s10 = m13*0.8
     s11 = m13*0.8
     s12 = m13*0.8
     s13 = m13*0.3
 
-    # set custom priors and limits here
-    if (0. < source_size1 < 200) and (0. < source_size2 < 200) and (0. < source_size3 < 200) and (0. < source_size4 < 200) and (0. < Ncol1 < 10**16.) and (0. < Ncol2 < 10**16.) and (0. < Ncol3 < 10**16.) and (0. < Ncol4 < 10**16.) and (vlsr1 < (vlsr2-0.05)) and (vlsr2 < (vlsr3-0.05)) and (vlsr3 < (vlsr4-0.05)) and (vlsr2 < (vlsr1+0.3)) and (vlsr3 < (vlsr2+0.3)) and (vlsr4 < (vlsr3+0.3)) and dV < 0.3:
-        
-        p0 = np.log(1.0/(np.sqrt(2*np.pi)*s0))-0.5*(source_size1-m0)**2/s0**2
-        p1 = np.log(1.0/(np.sqrt(2*np.pi)*s1))-0.5*(source_size2-m1)**2/s1**2
-        p2 = np.log(1.0/(np.sqrt(2*np.pi)*s2))-0.5*(source_size3-m2)**2/s2**2
-        p3 = np.log(1.0/(np.sqrt(2*np.pi)*s3))-0.5*(source_size4-m3)**2/s3**2
+    # Zero likelihood if any parameters are out of bounds to prevent walker from accepting illegal step
+    if not is_within_bounds(theta):
+        return -np.inf
+    
+    # Compute log-priors for each parameter, assuming a Gaussian distribution centered at prior mean
+    p0 = np.log(1.0/(np.sqrt(2*np.pi)*s0))-0.5*(source_size1-m0)**2/s0**2
+    p1 = np.log(1.0/(np.sqrt(2*np.pi)*s1))-0.5*(source_size2-m1)**2/s1**2
+    p2 = np.log(1.0/(np.sqrt(2*np.pi)*s2))-0.5*(source_size3-m2)**2/s2**2
+    p3 = np.log(1.0/(np.sqrt(2*np.pi)*s3))-0.5*(source_size4-m3)**2/s3**2
+    
+    # We don't use column density, since this won't hold consistent for HC9N <-> linear species
+    p8 = np.log(1.0/(np.sqrt(2*np.pi)*s8))-0.5*(Tex-m8)**2/s8**2
+    p9 = np.log(1.0/(np.sqrt(2*np.pi)*s9))-0.5*(vlsr1-m9)**2/s9**2
+    p10 = np.log(1.0/(np.sqrt(2*np.pi)*s10))-0.5*(vlsr2-m10)**2/s10**2
+    p11 = np.log(1.0/(np.sqrt(2*np.pi)*s11))-0.5*(vlsr3-m11)**2/s11**2
+    p12 = np.log(1.0/(np.sqrt(2*np.pi)*s12))-0.5*(vlsr4-m12)**2/s12**2
+    p13 = np.log(1.0/(np.sqrt(2*np.pi)*s13))-0.5*(dV-m13)**2/s13**2
 
-        p8 = np.log(1.0/(np.sqrt(2*np.pi)*s8))-0.5*(Tex-m8)**2/s8**2
+    return p0 + p1 + p2 + p3 + p8 + p9 + p10 + p11 + p12 + p13
 
-        p9 = np.log(1.0/(np.sqrt(2*np.pi)*s9))-0.5*(vlsr1-m9)**2/s9**2
-        p10 = np.log(1.0/(np.sqrt(2*np.pi)*s10))-0.5*(vlsr2-m10)**2/s10**2
-        p11 = np.log(1.0/(np.sqrt(2*np.pi)*s11))-0.5*(vlsr3-m11)**2/s11**2
-        p12 = np.log(1.0/(np.sqrt(2*np.pi)*s12))-0.5*(vlsr4-m12)**2/s12**2
-
-        p13 = np.log(1.0/(np.sqrt(2*np.pi)*s13))-0.5*(dV-m13)**2/s13**2
-
-        return p0 + p1 + p2 + p3 + p8 + p9 + p10 + p11 + p12 + p13
-
-    return -np.inf
-
+# Log-probability for MCMC, evaluating model parameters with both prior distribution and observed fit
 def lnprob(theta, datagrid, mol_cat, prior_stds, prior_means):
     lp = lnprior(theta, prior_stds, prior_means)
     if not np.isfinite(lp):
@@ -232,88 +248,54 @@ def lnprob(theta, datagrid, mol_cat, prior_stds, prior_means):
     return lp + lnlike(theta, datagrid, mol_cat)
 
 
-def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_path, restart=True):
-    print(f"Fitting column densities for {mol_name}. restart = {restart}.")
-
+def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_path, restart=True, template_run=False):
+    print(f"Fitting column densities for {mol_name}. Restart = {restart}.")
     ndim, nwalkers = 14, 128
+    if not os.path.exists(datafile):
+        raise FileNotFoundError(f"The data file {datafile} could not be found.")
     datagrid = np.load(datafile, allow_pickle=True)
-    mol_cat = MolCat(mol_name, catalogue) 
+    mol_cat = MolCat(mol_name, catalogue)
 
-    # Define initial parameter values for the MCMC walkers
-    # initial = np.array([99, 65, 265, 262, 1.98e12, 6.22e12, 2.92e12, 4.88e12, 6.1, 5.595, 5.764, 5.886, 6.017, 0.121]) # BENZONITRILE
-    initial = np.array([42.8, 24.3, 47.9, 21.5, 5.8e13, 9.5e13, 4.e13, 1.06e14, 7.7, 5.603, 5.745, 5.873, 6.024, 0.1568]) # LOOMIS
-    # initial = np.array([37, 25, 56, 22, 2.47e12, 11.19e12, 2.20e12, 5.64e12, 6.7, 5.624, 5.790, 5.910, 6.033, 0.117])  # HC9N
-
-    if restart:
-        print("Initializing tight ball of walkers around hardcoded values.")
-        perturbation = np.array([1.e-1, 1.e-1, 1.e-1, 1.e-1, 1.e10, 1.e10, 1.e10, 1.e10, 1.e-3, 1.e-3, 1.e-3, 1.e-3, 1.e-3, 1.e-3])
-        pos = [initial + perturbation * np.random.randn(ndim) for i in range(nwalkers)]
+    # Choose initial parameters and perturbations based on the run type
+    if template_run:
+        # Hardcoded values specific for template species like HC9N or Benzonitrile
+        # Initial values and standard deviations from published literature, like Loomis et al. (2021)
+        initial = np.array([37, 25, 56, 22, 2.47e12, 11.19e12, 2.20e12, 5.64e12, 6.7, 5.624, 5.790, 5.910, 6.033, 0.117])
+        prior_means = initial
+        prior_stds = np.array([2.5, 2.0, 6.5, 2.0, 0.30e12, 1.75e12, 0.265e12, 1.185e12, 0.1, 0.0015, 0.001, 0.0035, 0.002, 0.002])
+        print(f"Using hardcoded priors for a template run of {mol_name}.")
     else:
-        print(f"Initializing tight ball of walkers using prior chain values of {mol_name}.")
-        chain_data = np.load(os.path.join(fit_folder, mol_name, "chain.npy"))[:,-200:,:].reshape(-1, ndim).T
-        initial = np.median(chain_data, axis=1)
-        perturbation = np.array([1.e-1, 1.e-1, 1.e-1, 1.e-1, 1.e10, 1.e10, 1.e10, 1.e10, 1.e-3, 1.e-3, 1.e-3, 1.e-3, 1.e-3, 1.e-3])
-        pos = [initial + perturbation * np.random.randn(ndim) for i in range(nwalkers)]
+        # Load priors from previous chain data or specified path
+        if not os.path.exists(prior_path):
+            raise FileNotFoundError(f"The prior path {prior_path} could not be found.")
+        psamples = np.load(prior_path).T
+        prior_means = np.percentile(psamples, 50, axis=1)
+        prior_stds = (np.percentile(psamples, 16, axis=1) + np.percentile(psamples, 84, axis=1) - 2 * prior_means) / 2
+        if restart:
+            # Restart with predefined initial values from domain-specific sources
+            initial = np.array([42.8, 24.3, 47.9, 21.5, 5.8e13, 9.5e13, 4.e13, 1.06e14, 7.7, 5.603, 5.745, 5.873, 6.024, 0.1568])
+            print("Restarting with hardcoded initial values from the TMC-1 MCMC codebase.")
+        else:
+            # Continue from the existing chain data for this molecule
+            chain_data = np.load(os.path.join(fit_folder, mol_name, "chain.npy"))[:,-200:,:].reshape(-1, ndim).T
+            initial = np.median(chain_data, axis=1)
+            print(f"Continuing from existing chain data of {mol_name}.")
 
-    # Load and process prior samples
-    psamples = np.load(prior_path).T
-    psamples_flat = psamples.reshape(ndim, -1)
+    # Initialize walkers with a small perturbation relative to the prior standard deviations
+    perturbation = np.array([1.e-1, 1.e-1, 1.e-1, 1.e-1, 1.e10, 1.e10, 1.e10, 1.e10, 1.e-3, 1.e-3, 1.e-3, 1.e-3, 1.e-3, 1.e-3])
+    pos = [initial + perturbation * np.random.randn(ndim) for i in range(nwalkers)]
+
+    # Ensure all initial positions are valid, ideally in a tight ball (as per emcee documentation)
+    if len(pos) != nwalkers:
+        print(f"Warning: Only initialized {len(pos)} valid walkers out of the requested {nwalkers}.")
+    else:
+        print(f"Successfully initialized {len(pos)} valid walkers.")
     
-    # Compute prior means and standard deviations
-    prior_means = np.percentile(psamples_flat, 50, axis=1)
-    lower_percentiles = np.percentile(psamples_flat, 16, axis=1)
-    upper_percentiles = np.percentile(psamples_flat, 84, axis=1)
-    prior_stds = (np.abs(lower_percentiles - prior_means) + np.abs(upper_percentiles - prior_means)) / 2
-
-
-    def is_within_bounds(params):
-        source_size1, source_size2, source_size3, source_size4, Ncol1, Ncol2, Ncol3, Ncol4, Tex, vlsr1, vlsr2, vlsr3, vlsr4, dV = params
-        if not (0. < source_size1 < 200):
-            return False, f"source_size1 out of bounds: {source_size1}"
-        if not (0. < source_size2 < 200):
-            return False, f"source_size2 out of bounds: {source_size2}"
-        if not (0. < source_size3 < 200):
-            return False, f"source_size3 out of bounds: {source_size3}"
-        if not (0. < source_size4 < 200):
-            return False, f"source_size4 out of bounds: {source_size4}"
-        if not (0. < Ncol1 < 10**16):
-            return False, f"Ncol1 out of bounds: {Ncol1}"
-        if not (0. < Ncol2 < 10**16):
-            return False, f"Ncol2 out of bounds: {Ncol2}"
-        if not (0. < Ncol3 < 10**16):
-            return False, f"Ncol3 out of bounds: {Ncol3}"
-        if not (0. < Ncol4 < 10**16):
-            return False, f"Ncol4 out of bounds: {Ncol4}"
-        if not (vlsr1 < (vlsr2 - 0.05)):
-            return False, f"vlsr1 not less than vlsr2 - 0.05: {vlsr1} >= {vlsr2 - 0.05}"
-        if not (vlsr2 < (vlsr3 - 0.05)):
-            return False, f"vlsr2 not less than vlsr3 - 0.05: {vlsr2} >= {vlsr3 - 0.05}"
-        if not (vlsr3 < (vlsr4 - 0.05)):
-            return False, f"vlsr3 not less than vlsr4 - 0.05: {vlsr3} >= {vlsr4 - 0.05}"
-        if not (vlsr2 < (vlsr1 + 0.3)):
-            return False, f"vlsr2 not less than vlsr1 + 0.3: {vlsr2} >= {vlsr1 + 0.3}"
-        if not (vlsr3 < (vlsr2 + 0.3)):
-            return False, f"vlsr3 not less than vlsr2 + 0.3: {vlsr3} >= {vlsr2 + 0.3}"
-        if not (vlsr4 < (vlsr3 + 0.3)):
-            return False, f"vlsr4 not less than vlsr3 + 0.3: {vlsr4} >= {vlsr3 + 0.3}"
-        if not (dV < 0.3):
-            return False, f"dV out of bounds: {dV}"
-        return True, "Within bounds"
-
-    # Check how many walkers are within the bounds and print their positions
-    valid_walkers_info = [is_within_bounds(walker) for walker in pos]
-    num_valid_walkers = sum(1 for valid, _ in valid_walkers_info if valid)
-    print(f"Number of walkers within bounds: {num_valid_walkers}/{nwalkers}")
-    for i, (walker, (valid, info)) in enumerate(zip(pos, valid_walkers_info)):
-        if not valid:
-            print(f"Walker {i}: {walker}, Valid: {valid}, Info: {info}")
-    
-    ncores = multiprocessing.cpu_count()
-
     # Set up the sampler with a multiprocessing pool
-    with multiprocessing.Pool(ncores) as pool:
+    with Pool() as pool:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(datagrid, mol_cat, prior_stds, prior_means), pool=pool)
 
+        # Perform MCMC sampling
         for i in tqdm(range(nruns), desc=f"MCMC Sampling for {mol_name}"):
             sampler.run_mcmc(pos, 1)
             file_name = os.path.join(fit_folder, mol_name, "chain.npy")
@@ -333,22 +315,27 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     if not os.path.exists(catfile):
         raise FileNotFoundError(f"No catalog file found at {catfile}.")
 
+    # Initialize molecular simulation components
     mol_cat = MolCat(mol_name, catfile)
     obs_params = ObsParams("init", source_size=40)
     sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, [0.0], [7.e11], [0.37], [8.], ll=[7000], ul=[30000], gauss=False)
     freq_sim = np.array(sim.freq_sim)
     int_sim = np.array(sim.int_sim)
 
+    # Read and process spectral data
     print(f"Reading in data from {data_path}")
     freqs_gotham, ints_gotham, yerrs_gotham, covered_trans_gotham = read_file(data_path, freq_sim, int_sim, block_interlopers=block_interlopers, plot=False)
     covered_trans_gotham = np.array(covered_trans_gotham, dtype=int)
+    
+    # Assemble data grid for MCMC fitting
     datagrid = [freqs_gotham, ints_gotham, yerrs_gotham, covered_trans_gotham]
     datagrid = np.array(datagrid, dtype=object)
     datafile_path = os.path.join(fit_folder, mol_name, "all_" + mol_name + "_lines_GOTHAM_freq_space.npy")
+    
     print("Saving data to: " + datafile_path)
     for i, item in enumerate(datagrid):
         print(f"Datagrid element {i}  |  Type: {type(item)}  |  Shape: {item.shape if isinstance(item, np.ndarray) else 'N/A'}")
-
+        
     np.save(datafile_path, datagrid, allow_pickle=True)
 
     return datafile_path, catfile
@@ -364,7 +351,7 @@ if __name__ == "__main__":
         'data_path': os.path.join(BASE_DIR, 'GOTHAM-data', 'hc11n_chunks.npy'),
         'block_interlopers': True,
         'nruns': 10000,
-        'restart': False,
+        'restart': True,
         'prior_path': os.path.join(BASE_DIR, 'fit_results', 'hc9n_hfs', 'chain.npy'),
     }
 
@@ -387,11 +374,11 @@ if __name__ == "__main__":
     )
     
     param_labels = [
-        "Source Size 1", "Source Size 2", "Source Size 3", "Source Size 4",
-        "Column Density 1", "Column Density 2", "Column Density 3", "Column Density 4",
-        "Excitation Temperature", 
-        "Velocity LSR 1", "Velocity LSR 2", "Velocity LSR 3", "Velocity LSR 4",
-        "Delta V"
+        'Source Size #1 [″]', 'Source Size #2 [″]', 'Source Size #3 [″]', 'Source Size #4 [″]',
+        'N_col #1 [cm⁻²]', 'N_col #2 [cm⁻²]', 'N_col #3 [cm⁻²]', 'N_col #4 [cm⁻²]',
+        'Excitation Temperature',
+        'v_LSRK #1 [km s⁻¹]', 'v_LSRK #2 [km s⁻¹]', 'v_LSRK #3 [km s⁻¹]', 'v_LSRK #4 [km s⁻¹]',
+        'dV [km s⁻¹]'
     ]
 
     # Verify that chain file path matches where data was saved
