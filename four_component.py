@@ -249,7 +249,7 @@ def lnprob(theta, datagrid, mol_cat, prior_stds, prior_means):
 
 
 # Conduct Markov Chain Monte Carlo (MCMC) inference using emcee's ensemble sampler
-def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_path, restart=True, template_run=True):
+def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_path, restart=True, template_run=False):
     print(f"Fitting column densities for {mol_name}. Restart = {restart}.")
     ndim, nwalkers = 14, 128
     if not os.path.exists(datafile):
@@ -261,20 +261,36 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
     if template_run:
         # Hardcoded values specific for template species like HC9N or Benzonitrile
         # Initial values and standard deviations from published literature, like Loomis et al. (2021)
-        initial = np.array([37, 25, 56, 22, 2.47e12, 11.19e12, 2.20e12, 5.64e12, 6.7, 5.624, 5.790, 5.910, 6.033, 0.117])
+        initial = np.array([37, 25, 56, 22, 2.47e12, 11.19e12, 2.20e12, 5.64e12, 6.7, 5.624, 5.790, 5.910, 6.033, 0.117]) # HC9N
         prior_means = initial
         prior_stds = np.array([2.5, 2.0, 6.5, 2.0, 0.30e12, 1.75e12, 0.265e12, 1.185e12, 0.1, 0.0015, 0.001, 0.0035, 0.002, 0.002])
         print(f"Using hardcoded priors for a template run of {mol_name}.")
     else:
+        
         # Load priors from previous chain data or specified path
         if not os.path.exists(prior_path):
             raise FileNotFoundError(f"The prior path {prior_path} could not be found.")
         psamples = np.load(prior_path).T
-        prior_means = np.percentile(psamples, 50, axis=1)
-        prior_stds = (np.percentile(psamples, 16, axis=1) + np.percentile(psamples, 84, axis=1) - 2 * prior_means) / 2
+        print(f"Dimensions of samples loaded from chain: {psamples.shape}")
+                
+        prior_means = np.mean(np.percentile(psamples, 50, axis=1), axis=1)
+        percentile_16 = np.mean(np.percentile(psamples, 16, axis=1), axis=1)
+        percentile_84 = np.mean(np.percentile(psamples, 84, axis=1), axis=1)
+        prior_stds = np.abs((percentile_16 + percentile_84 - 2 * prior_means) / 2.)
+        
+        if prior_means.shape == (14,) and prior_stds.shape == (14,) and prior_means.ndim == 1 and prior_stds.ndim == 1:
+            print("Priors are correctly shaped as 1-dimensional arrays with 14 elements each.")
+        else:
+            raise ValueError("Error: prior_means and prior_stds should be 1-dimensional arrays with 14 elements each.")
+        
         if restart:
             # Restart with predefined initial values from domain-specific sources
-            initial = np.array([42.8, 24.3, 47.9, 21.5, 5.8e13, 9.5e13, 4.e13, 1.06e14, 7.7, 5.603, 5.745, 5.873, 6.024, 0.1568])
+            # initial = np.array([42.8, 24.3, 47.9, 21.5, 5.8e13, 9.5e13, 4.e13, 1.06e14, 7.7, 5.603, 5.745, 5.873, 6.024, 0.1568])
+            
+            # HC9N telescope and source properties, but with a perturbed version of HC11N colummn dentisities
+            initial = np.array([37, 25, 56, 22, 0.73e11, 2.60e11, 0.36e11, 4.12e11, 6.7, 5.624, 5.790, 5.910, 6.033, 0.117])
+            print("Offsetting HC11N Ncol values, and using HC9N telescope and source properties.")
+            initial += np.array([0, 0, 0, 0, 1.e10, -1.e10, 1.e10, -1.e10, 0, 0, 0, 0, 0, 0])
             print("Restarting with hardcoded initial values from the TMC-1 MCMC codebase.")
         else:
             # Continue from the existing chain data for this molecule
@@ -333,7 +349,7 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     datagrid = np.array(datagrid, dtype=object)
     datafile_path = os.path.join(fit_folder, mol_name, "all_" + mol_name + "_lines_GOTHAM_freq_space.npy")
     
-    print("Saving data to: " + datafile_path)
+    print(f"Saving data to: {datafile_path}")
     for i, item in enumerate(datagrid):
         print(f"Datagrid element {i}  |  Type: {type(item)}  |  Shape: {item.shape if isinstance(item, np.ndarray) else 'N/A'}")
         
@@ -345,15 +361,15 @@ if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
     input_dict = {
-        'mol_name': 'hc9n_hfs',
+        'mol_name': 'hc11n',
         'fit_folder': os.path.join(BASE_DIR, 'fit_results'),
         'cat_folder': os.path.join(BASE_DIR, 'GOTHAM-catalogs'),
-        'data_path': os.path.join(BASE_DIR, 'GOTHAM-data', 'hc9n_hfs_chunks.npy'),
+        'data_path': os.path.join(BASE_DIR, 'GOTHAM-data', 'hc11n_chunks.npy'),
         'block_interlopers': True,
         'nruns': 10000,
         'restart': True,
         'prior_path': os.path.join(BASE_DIR, 'fit_results', 'hc9n_hfs', 'chain.npy'),
-        'template_run': True
+        'template_run': False
     }
 
     datafile, catalogue = init_setup(

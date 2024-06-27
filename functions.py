@@ -2,7 +2,6 @@ import numpy as np
 from numpy import exp as exp
 import time as tm
 import corner
-import matplotlib.pylab as pl
 import matplotlib.pyplot as plt
 from constants import *
 
@@ -549,10 +548,10 @@ def plot_results(chain_path, param_labels):
     fig.savefig(f"{chain_path[:-4]}_corner.png")  # Save the figure
 
     # Plotting trace plots
-    fig, axes = pl.subplots(nrows=chain.shape[2], figsize=(10, 2 * chain.shape[2]))
+    fig, axes = plt.subplots(nrows=chain.shape[2], figsize=(10, 2 * chain.shape[2]))
     for i in range(chain.shape[2]):
         ax = axes[i]
-        ax.plot(chain[:, :, i].T, color="k", alpha=0.3)  # Transpose for proper plotting
+        ax.plot(chain[:, :, i].T, color="k", alpha=0.3)
         ax.set_title(f'Parameter {i+1}: {param_labels[i]}')
     axes[-1].set_xlabel("Step Number")
     plt.tight_layout()
