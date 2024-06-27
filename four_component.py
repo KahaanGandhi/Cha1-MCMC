@@ -15,6 +15,14 @@ def calc_noise_std(intensity, threshold=3.5):
     dummy_mean = np.nanmean(dummy_ints)
     dummy_std = np.nanstd(dummy_ints)
 
+    # for _ in range(3):
+    #     for chan in np.where(dummy_ints-dummy_mean < (-dummy_std*threshold))[0]:
+    #         noise[chan-10:chan+10] = np.nan
+    #     for chan in np.where(dummy_ints-dummy_mean > (dummy_std*threshold))[0]:
+    #         noise[chan-10:chan+10] = np.nan
+    #     noise_mean = np.nanmean(noise)
+    #     noise_std = np.nanstd(np.real(noise))
+
     # Repeat 3 times to make sure to avoid any interloping lines
     for chan in np.where(dummy_ints-dummy_mean < (-dummy_std*threshold))[0]:
         noise[chan-10:chan+10] = np.nan
@@ -194,6 +202,7 @@ def lnlike(theta, datagrid, mol_cat):
     
     return -0.5*tot_lnlike
 
+
 # Apply physical priors (e.g. positivity constraints) and limits. For TMC-1, impose sequential order on velocities
 def is_within_bounds(theta):
     source_size1, source_size2, source_size3, source_size4, Ncol1, Ncol2, Ncol3, Ncol4, Tex, vlsr1, vlsr2, vlsr3, vlsr4, dV = theta
@@ -205,6 +214,7 @@ def is_within_bounds(theta):
         vlsr2 < (vlsr1 + 0.3) and vlsr3 < (vlsr2 + 0.3) and vlsr4 < (vlsr3 + 0.3) and
         dV < 0.3 and 2.7 < Tex
     )
+
 
 # Log-prior probability for MCMC, ensuring that a set of model parameters falls within physical and statistical constraints
 def lnprior(theta, prior_stds, prior_means):
@@ -239,6 +249,7 @@ def lnprior(theta, prior_stds, prior_means):
     p13 = np.log(1.0/(np.sqrt(2*np.pi)*s13))-0.5*(dV-m13)**2/s13**2
 
     return p0 + p1 + p2 + p3 + p8 + p9 + p10 + p11 + p12 + p13
+
 
 # Log-probability for MCMC, evaluating model parameters with both prior distribution and observed fit
 def lnprob(theta, datagrid, mol_cat, prior_stds, prior_means):
@@ -321,6 +332,7 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
 
     return
 
+
 def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     print(f"Running setup for: {mol_name}, block interlopers = {block_interlopers}.")
     try:
@@ -356,6 +368,7 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     np.save(datafile_path, datagrid, allow_pickle=True)
 
     return datafile_path, catfile
+
 
 if __name__ == "__main__":
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
