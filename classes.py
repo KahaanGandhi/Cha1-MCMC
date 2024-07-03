@@ -1,3 +1,14 @@
+# ----------------------------------------------------------------------------------
+# This file has been developed by modifying and extending code from the following sources:
+# - Spectral Simulator: https://github.com/ryanaloomis/spectral_simulator
+# - TMC-1 MCMC Fitting: https://github.com/ryanaloomis/TMC1_mcmc_fitting
+#
+# Reference for the original study:
+# Loomis, R.A. et al., Nat Astron 5, 188–196 (2021), DOI: 10.1038/s41550-020-01261-4
+#
+# Developer: Kahaan Gandhi
+# ----------------------------------------------------------------------------------
+
 import numpy as np
 from numpy import exp as exp
 import time as tm
@@ -391,10 +402,10 @@ class MolSim(object):
 
 
 	# Fit the current simulation to the specified observation
-	def fit_obs(self, mol_obs):
-		self.chain = lm_fit(self, mol_obs)
+	# def fit_obs(self, mol_obs):
+	# 	self.chain = lm_fit(self, mol_obs)
 
-		return
+	# 	return
 
 
 

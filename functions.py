@@ -1,3 +1,14 @@
+# ----------------------------------------------------------------------------------
+# This file has been developed by modifying and extending code from the following sources:
+# - Spectral Simulator: https://github.com/ryanaloomis/spectral_simulator
+# - TMC-1 MCMC Fitting: https://github.com/ryanaloomis/TMC1_mcmc_fitting
+#
+# Reference for the original study:
+# Loomis, R.A. et al., Nat Astron 5, 188–196 (2021), DOI: 10.1038/s41550-020-01261-4
+#
+# Developer: Kahaan Gandhi
+# ----------------------------------------------------------------------------------
+
 import numpy as np
 from numpy import exp as exp
 import time as tm
@@ -526,8 +537,8 @@ def apply_beam(frequency, intensity, source_size, dish_size):
     
     return intensity_diluted
 
+
 def plot_results(chain_path, param_labels):
-    
     plt.rcParams.update({
         "text.usetex": False,
         "font.family": "DejaVu Sans"
@@ -544,16 +555,18 @@ def plot_results(chain_path, param_labels):
     samples = chain.reshape((-1, chain.shape[-1]))
     
     # Generating corner plot
-    fig = corner.corner(samples, labels=param_labels, quantiles=[0.16, 0.5, 0.84], truths=[None]*len(param_labels), show_titles=True, title_kwargs={"fontsize": 12})
+    fig = corner.corner(samples, labels=param_labels, quantiles=[0.16, 0.5, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
     fig.savefig(f"{chain_path[:-4]}_corner.png")  # Save the figure
 
     # Plotting trace plots
-    fig, axes = plt.subplots(nrows=chain.shape[2], figsize=(10, 2 * chain.shape[2]))
-    for i in range(chain.shape[2]):
-        ax = axes[i]
+    n_params = len(param_labels)  # Number of parameters to plot
+    fig, axes = plt.subplots(nrows=n_params, figsize=(10, 2 * n_params))
+    if n_params == 1:
+        axes = [axes]  # Make it iterable if only one parameter
+    for i, ax in enumerate(axes):
         ax.plot(chain[:, :, i].T, color="k", alpha=0.3)
         ax.set_title(f'Parameter {i+1}: {param_labels[i]}')
-    axes[-1].set_xlabel("Step Number")
+        ax.set_xlabel("Step Number")
     plt.tight_layout()
     fig.savefig(f"{chain_path[:-4]}_trace.png")  # Save the figure
 
