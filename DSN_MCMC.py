@@ -1,12 +1,21 @@
 import emcee
 import os
 import numpy as np
-import multiprocessing
+from multiprocessing import Pool
 import matplotlib.pyplot as plt
 from numba import njit
 from tqdm import tqdm
 from classes import *
 from constants import *
+
+# TODO: modify ObsParams to reflect DSN DSS-43 (keeping beam correction in mind)
+# TODO: add animation code to plot results
+# TODO: convert +/- 10 channel iterative mask to frequency space (GOTHAM <> DSN), then reapply corrected channel masking
+# TODO: revert to old multithreading
+# TODO: check on mK vs. K, fix in preprocessing step if needed
+# TODO: check on range of DSN observations (18 - 28, 17 - 27)
+# TODO: add scientific notation to corner plots
+# TODO: try simulating best fit parameters w/ LTE CASSIS
 
 # Calculates local RMS noise in a given spectrum by iteratively masking outliers. 3.5σ default, 6σ for weaker species. 
 def calc_noise_std(intensity, threshold=3.5):
@@ -26,6 +35,7 @@ def calc_noise_std(intensity, threshold=3.5):
         
     return noise_mean, noise_std
 
+
 # Reads in the data, returns the data which has coverage of a given species (from simulated intensities)
 def read_file(filename, restfreqs, int_sim, shift=0.0, GHz=False, plot=False, block_interlopers=True):
     data = np.load(filename, allow_pickle=True)
@@ -43,14 +53,14 @@ def read_file(filename, restfreqs, int_sim, shift=0.0, GHz=False, plot=False, bl
 
     # Iterate through rest frequencies to identify their corresponding spectral lines
     for i, rf in enumerate(restfreqs):
-        thresh = 0.05                                                # Set a threshold as 5% of the peak intensity...
-        if int_sim[i] > thresh*np.max(int_sim):                      # find significant simulated intensities...
-            vel = (rf - freqs)/rf*300000 + shift                     # calculate velocity shift for each frequency...
-            locs = np.where((vel<(1.+3.8225)) & (vel>(-1.+3.8225)))  # and filter for a velocity range
+        thresh = 0.05                                                        # Set a threshold as 5% of the peak intensity...
+        if int_sim[i] > thresh * np.max(int_sim):                            # find significant simulated intensities...
+            vel = (rf - freqs) / rf * 300000 + shift                         # calculate velocity shift for each frequency...
+            locs = np.where((vel < (1. + 3.8225)) & (vel > (-1. + 3.8225)))  # and filter for a velocity range
 
             if locs[0].size != 0:
                 noise_mean, noise_std = calc_noise_std(intensity[locs])
-                if block_interlopers and (np.max(intensity[locs]) > 3.5*noise_std): # 3.5σ threshold, 6σ for weaker species
+                if block_interlopers and (np.max(intensity[locs]) > 3.5 * noise_std): # 3.5σ threshold, 6σ for weaker species
                     print(f"{rf:10.4f} MHz  |  Interloping line detected.")
                     if plot:
                         plt.plot(freqs[locs], intensity[locs])
@@ -61,7 +71,7 @@ def read_file(filename, restfreqs, int_sim, shift=0.0, GHz=False, plot=False, bl
                     print(f"{rf:10.4f} MHz  |  Line found. ")
                     relevant_freqs[locs] = freqs[locs]
                     relevant_intensity[locs] = intensity[locs]
-                    relevant_yerrs[locs] = np.sqrt(noise_std**2 + (intensity[locs]*0.1)**2)
+                    relevant_yerrs[locs] = np.sqrt(noise_std ** 2 + (intensity[locs] * 0.1) ** 2)
                 if plot:
                     plt.plot(freqs[locs], intensity[locs])
                     plt.show()
@@ -80,7 +90,7 @@ def read_file(filename, restfreqs, int_sim, shift=0.0, GHz=False, plot=False, bl
 # Simulate molecular spectral emission lines for a set of observational parameters
 def predict_intensities(source_size, Ncol, Tex, dV, mol_cat):
     obs_params = ObsParams("test", source_size=source_size)
-    sim = MolSim("mol sim", mol_cat, obs_params, [0.0], [Ncol], [dV], [Tex], ll=[18000], ul=[28000], gauss=False)
+    sim = MolSim("mol sim", mol_cat, obs_params, [0.0], [Ncol], [dV], [Tex], ll=[18000], ul=[27000], gauss=False)
     freq_sim = sim.freq_sim
     int_sim = sim.int_sim
     tau_sim = sim.tau_sim
@@ -92,7 +102,7 @@ def predict_intensities(source_size, Ncol, Tex, dV, mol_cat):
 @njit(fastmath=True)
 def apply_beam(frequency, intensity, source_size, dish_size):
     # Convert frequencies to wavelenths (cm) 
-    wavelength = cm/(frequency*1e6)
+    wavelength = cm / (frequency * 1e6)
     
     # Compute beam size with diffraction-limited resolution formula, assuming each component is centered in the beam
     beam_size = wavelength * 206265 * 1.22 / dish_size  # 206265 converts radians to arcseconds
@@ -101,12 +111,12 @@ def apply_beam(frequency, intensity, source_size, dish_size):
     dilution_factor = source_size ** 2 / (beam_size ** 2 + source_size ** 2)
     
     # Apply the beam dilution factor to the intensities
-    intensity_diluted = intensity*dilution_factor
+    intensity_diluted = intensity * dilution_factor
     
     return intensity_diluted
 
 
-# Construct a composite model of molecular line emissions
+# Construct a model of molecular line emissions (can sum over multiple sources to create composite model)
 @njit(fastmath=True)
 def make_model(freqs, intensities, source_size, datagrid_freq, datagrid_vel, vlsr, dV, Tex):
     model = np.zeros(datagrid_vel.shape)
@@ -202,6 +212,8 @@ def lnprob(theta, datagrid, mol_cat, prior_stds, prior_means):
 
 def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     print(f"Running setup for: {mol_name}, block interlopers = {block_interlopers}.")
+    catfile = os.path.join(cat_folder, f"{mol_name}.cat")
+
     try:
         os.mkdir(fit_folder)
     except FileExistsError:
@@ -210,18 +222,13 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
         os.mkdir(os.path.join(fit_folder, mol_name))
     except FileExistsError:
         pass
-    
-    catfile = os.path.join(cat_folder, f"{mol_name}.cat")
     if not os.path.exists(catfile):
         raise FileNotFoundError(f"No catalog file found at {catfile}.")
 
-    # TODO: modify ObsParams
-    # TODO: add animation code to plot results
-
     # Initialize molecular simulation components
     mol_cat = MolCat(mol_name, catfile)
-    obs_params = ObsParams("init", source_size=100)
-    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[0.0], C=[4.5e12], dV=[0.7575], T=[7.1], ll=[18000], ul=[28000], gauss=False)
+    obs_params = ObsParams("init", dish_size=70)
+    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[0.0], C=[4.5e12], dV=[0.7575], T=[7.1], ll=[18000], ul=[27000], gauss=False)
     freq_sim = np.array(sim.freq_sim)
     int_sim = np.array(sim.int_sim)
     
@@ -236,9 +243,10 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     datafile_path = os.path.join(fit_folder, mol_name, "all_" + mol_name + "_lines_DSN_freq_space.npy")
     
     print(f"Saving data to: {datafile_path}")
-    for i, item in enumerate(datagrid):
-        print(f"Datagrid element {i}  |  Type: {type(item)}  |  Shape: {item.shape if isinstance(item, np.ndarray) else 'N/A'}")
-        
+    for i, element in enumerate(datagrid):
+        element_type = type(element).__name__
+        element_shape = element.shape if isinstance(element, np.ndarray) else 'N/A'
+        print(f"Reduced Spectrum DataGrid | Index: {i} | Type: {element_type} | Shape: {element_shape}")
     np.save(datafile_path, datagrid, allow_pickle=True)
 
     return datafile_path, catfile
@@ -257,7 +265,8 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
     if template_run:
         # Hardcoded values specific for template species like HC5N
         # Source size, Ncol, Tex, vlsr, dV
-        initial = np.array([50, 4.5e12, 7.1, 3.8225, 0.7575]) 
+        initial = np.array([50, 4.5e12, 7.1, 3.8225, 0.7575])
+        # initial = np.array([60 , 4.5e12, 14.0, 3.95, 0.7575]) 
         prior_means = initial
         prior_stds = np.array([6.5, 1.6e12, 0.8, 0.06, 0.22])
         print(f"Using hardcoded priors for a template run of {mol_name}.")
@@ -270,11 +279,11 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
     pos = [initial + perturbation * np.random.randn(ndim) for _ in range(nwalkers)]
     
     # Set up the sampler with a multiprocessing pool
-    with multiprocessing.Pool() as pool:
+    with Pool() as pool:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(datagrid, mol_cat, prior_stds, prior_means), pool=pool)
 
         # Perform affine invariant MCMC sampling with Gelman-Rubin convergence
-        for i in tqdm(range(nruns), desc=f"MCMC Sampling for {mol_name}"):
+        for _ in tqdm(range(nruns), desc=f"MCMC Sampling for {mol_name}"):
             sampler.run_mcmc(pos, 1)
             file_name = os.path.join(fit_folder, mol_name, "chain_DSN.npy")
             np.save(file_name, sampler.chain)
@@ -290,14 +299,14 @@ if __name__ == "__main__":
             'mol_name': 'hc5n_hfs',
             'fit_folder': os.path.join(BASE_DIR, 'DSN_fit_results'),
             'cat_folder': os.path.join(BASE_DIR, 'GOTHAM_catalogs'),
-            'data_path': os.path.join(BASE_DIR, 'DSN_data', 'hc5n_hfs_chunks.npy'),
+            'data_path': os.path.join(BASE_DIR, 'DSN_data', 'C2_hc5n_hfs_chunks.npy'),
             'block_interlopers': True,
             'nruns': 10000,
             'restart': True,
             'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain_DSN.npy'),
             'template_run': True
         }
-
+    
     datafile, catalogue = init_setup(
             fit_folder=input_dict['fit_folder'],
             cat_folder=input_dict['cat_folder'],
