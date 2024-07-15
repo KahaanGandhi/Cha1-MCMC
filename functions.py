@@ -551,7 +551,7 @@ def plot_results(chain_path, param_labels):
     samples = chain.reshape((-1, chain.shape[-1]))
     
     # Generating corner plot
-    fig = corner.corner(samples, labels=param_labels, quantiles=[0.16, 0.5, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
+    fig = corner.corner(samples, labels=param_labels, quantiles=[0.16, 0.5, 0.84], show_titles=True, title_kwargs={"fontsize": 12}, title_fmt=".2e")
     fig.savefig(f"{chain_path[:-4]}_corner.png")  # Save the figure
 
     # Plotting trace plots
