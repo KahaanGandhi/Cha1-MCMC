@@ -15,14 +15,13 @@ from tqdm import tqdm
 from classes import *
 from constants import *
 
-# TODO: modify ObsParams to reflect DSN DSS-43 (keeping beam correction in mind)
-# TODO: add animation code to plot results
+# TODO: modify ObsParams / MolSim to reflect DSN DSS-43 (keeping beam correction in mind)
 # TODO: convert +/- 10 channel iterative mask to frequency space (GOTHAM <> DSN), then reapply corrected channel masking
 # TODO: check on mK vs. K, fix in preprocessing step if needed
 # TODO: add scientific notation to corner plots
 # TODO: try simulating best fit parameters w/ LTE CASSIS
 # TODO: implement other run times (non template path, non restart)
-# TODO: fix documentation at top of files
+# TODO: verify vlsr for each source, and mask_radius
 
 # Calculates local RMS noise in a given spectrum by iteratively masking outliers. 3.5σ default, 6σ for weaker species. 
 def calc_noise_std(intensity, threshold=3.5):
@@ -33,13 +32,14 @@ def calc_noise_std(intensity, threshold=3.5):
 
     # Repeat 3 times to make sure to avoid any interloping lines
     for _ in range(3):
-        for chan in np.where(dummy_ints-dummy_mean < (-dummy_std*threshold))[0]:
-            noise[chan-10:chan+10] = np.nan
-        for chan in np.where(dummy_ints-dummy_mean > (dummy_std*threshold))[0]:
-            noise[chan-10:chan+10] = np.nan
+        mask_radius = 3  # Channel range to mask adjacents values (GOTHAM applied +/- 10 channel mask for 1.4kHz frequency resolution)
+        for chan in np.where(dummy_ints - dummy_mean < (-dummy_std * threshold))[0]:
+            noise[chan - mask_radius : chan + mask_radius] = np.nan
+        for chan in np.where(dummy_ints - dummy_mean > (dummy_std * threshold))[0]:
+            noise[chan - mask_radius : chan + mask_radius] = np.nan
         noise_mean = np.nanmean(noise)
         noise_std = np.nanstd(np.real(noise))
-        
+
     return noise_mean, noise_std
 
 
@@ -91,13 +91,19 @@ def read_file(filename, restfreqs, int_sim, shift=0.0, GHz=False, plot=False, bl
     relevant_intensity = relevant_intensity[mask]
     relevant_yerrs = relevant_yerrs[mask]
     
+    # TODO: take a look at our masked spectrum here, with plots...
+    # plt.scatter(relevant_freqs, relevant_intensity)
+    # plt.plot(relevant_freqs, relevant_intensity)
+    # plt.show()
+    # exit()
+    
     return(relevant_freqs, relevant_intensity, relevant_yerrs, covered_trans)
 
 
 # Simulate molecular spectral emission lines for a set of observational parameters
 def predict_intensities(source_size, Ncol, Tex, dV, mol_cat):
     obs_params = ObsParams("test", source_size=source_size)
-    sim = MolSim("mol sim", mol_cat, obs_params, [0.0], [Ncol], [dV], [Tex], ll=[18000], ul=[28000], gauss=False)
+    sim = MolSim("mol sim", mol_cat, obs_params, [0.0], [Ncol], [dV], [Tex], ll=[18000], ul=[27000], gauss=False)
     freq_sim = sim.freq_sim
     int_sim = sim.int_sim
     tau_sim = sim.tau_sim
@@ -235,7 +241,7 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     # Initialize molecular simulation components
     mol_cat = MolCat(mol_name, catfile)
     obs_params = ObsParams("init", dish_size=70)
-    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[0.0], C=[4.5e12], dV=[0.7575], T=[7.1], ll=[18000], ul=[28000], gauss=False)
+    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[0.0], C=[4.5e12], dV=[0.7575], T=[7.1], ll=[18000], ul=[27000], gauss=False)
     freq_sim = np.array(sim.freq_sim)
     int_sim = np.array(sim.int_sim)
     
