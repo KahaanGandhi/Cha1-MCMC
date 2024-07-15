@@ -1,8 +1,8 @@
 import emcee
 import os
 import numpy as np
-from multiprocessing import Pool
 import matplotlib.pyplot as plt
+from multiprocessing import Pool
 from numba import njit
 from tqdm import tqdm
 from classes import *
@@ -16,6 +16,7 @@ from constants import *
 # TODO: check on range of DSN observations (18 - 28, 17 - 27)
 # TODO: add scientific notation to corner plots
 # TODO: try simulating best fit parameters w/ LTE CASSIS
+# TODO: implemeent other run times (non template path, non restart)
 
 # Calculates local RMS noise in a given spectrum by iteratively masking outliers. 3.5σ default, 6σ for weaker species. 
 def calc_noise_std(intensity, threshold=3.5):
