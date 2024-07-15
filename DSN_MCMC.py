@@ -1,3 +1,10 @@
+# ----------------------------------------------------------------------------------
+# Developer: Kahaan Gandhi
+# Based on methodologies described in:
+# Loomis, R.A. et al., Nat Astron 5, 188–196 (2021), DOI: 10.1038/s41550-020-01261-4
+# Extends prior scripts for spectral simulation and MCMC inference.
+# ----------------------------------------------------------------------------------
+
 import emcee
 import os
 import numpy as np
@@ -11,12 +18,11 @@ from constants import *
 # TODO: modify ObsParams to reflect DSN DSS-43 (keeping beam correction in mind)
 # TODO: add animation code to plot results
 # TODO: convert +/- 10 channel iterative mask to frequency space (GOTHAM <> DSN), then reapply corrected channel masking
-# TODO: revert to old multithreading
 # TODO: check on mK vs. K, fix in preprocessing step if needed
-# TODO: check on range of DSN observations (18 - 28, 17 - 27)
 # TODO: add scientific notation to corner plots
 # TODO: try simulating best fit parameters w/ LTE CASSIS
-# TODO: implemeent other run times (non template path, non restart)
+# TODO: implement other run times (non template path, non restart)
+# TODO: fix documentation at top of files
 
 # Calculates local RMS noise in a given spectrum by iteratively masking outliers. 3.5σ default, 6σ for weaker species. 
 def calc_noise_std(intensity, threshold=3.5):
@@ -91,7 +97,7 @@ def read_file(filename, restfreqs, int_sim, shift=0.0, GHz=False, plot=False, bl
 # Simulate molecular spectral emission lines for a set of observational parameters
 def predict_intensities(source_size, Ncol, Tex, dV, mol_cat):
     obs_params = ObsParams("test", source_size=source_size)
-    sim = MolSim("mol sim", mol_cat, obs_params, [0.0], [Ncol], [dV], [Tex], ll=[18000], ul=[27000], gauss=False)
+    sim = MolSim("mol sim", mol_cat, obs_params, [0.0], [Ncol], [dV], [Tex], ll=[18000], ul=[28000], gauss=False)
     freq_sim = sim.freq_sim
     int_sim = sim.int_sim
     tau_sim = sim.tau_sim
@@ -229,7 +235,7 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     # Initialize molecular simulation components
     mol_cat = MolCat(mol_name, catfile)
     obs_params = ObsParams("init", dish_size=70)
-    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[0.0], C=[4.5e12], dV=[0.7575], T=[7.1], ll=[18000], ul=[27000], gauss=False)
+    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[0.0], C=[4.5e12], dV=[0.7575], T=[7.1], ll=[18000], ul=[28000], gauss=False)
     freq_sim = np.array(sim.freq_sim)
     int_sim = np.array(sim.int_sim)
     

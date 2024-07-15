@@ -1,12 +1,8 @@
 # ----------------------------------------------------------------------------------
-# This file has been developed by modifying and extending code from the following sources:
-# - Spectral Simulator: https://github.com/ryanaloomis/spectral_simulator
-# - TMC-1 MCMC Fitting: https://github.com/ryanaloomis/TMC1_mcmc_fitting
-#
-# Reference for the original study:
-# Loomis, R.A. et al., Nat Astron 5, 188–196 (2021), DOI: 10.1038/s41550-020-01261-4
-#
 # Developer: Kahaan Gandhi
+# Based on methodologies described in:
+# Loomis, R.A. et al., Nat Astron 5, 188–196 (2021), DOI: 10.1038/s41550-020-01261-4
+# Extends prior scripts for spectral simulation and MCMC inference.
 # ----------------------------------------------------------------------------------
 
 import numpy as np
