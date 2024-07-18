@@ -190,7 +190,7 @@ def is_within_bounds(theta):
         0. < source_size < 200. and
         0. < Ncol < 10**16. and
         0. < vlsr < 10. and
-        0. < dV < 2. and
+        0.2 < dV < 2. and
         2.7 < Tex < 20.
     )
 
@@ -247,7 +247,7 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     obs_params = ObsParams("init", dish_size=70)
     
     # TODO: try vlsr=[4.1], and other observational parameters
-    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[0.0], C=[4.5e12], dV=[0.7575], T=[7.1], ll=[18000], ul=[27000], gauss=False)
+    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[0.0], C=[3.4e12], dV=[0.7575], T=[10.0], ll=[18000], ul=[27000], gauss=False)
     freq_sim = np.array(sim.freq_sim)
     int_sim = np.array(sim.int_sim)
     
@@ -285,7 +285,7 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
         # Hardcoded values specific for template species like HC5N
         # Source size, Ncol, Tex, vlsr, dV
         # 10 K, 3.4e12
-        initial = np.array([48, 4.5e12, 7.1, 4.1, 0.7575])
+        initial = np.array([48, 3.4e12, 10.0, 4.1, 0.7575])
         # initial = np.array([60 , 4.5e12, 14.0, 3.95, 0.7575]) 
         prior_means = initial
         prior_stds = np.array([6.5, 1.6e12, 0.8, 0.06, 0.22])
@@ -321,7 +321,7 @@ if __name__ == "__main__":
             'cat_folder': os.path.join(BASE_DIR, 'GOTHAM_catalogs'),
             'data_path': os.path.join(BASE_DIR, 'DSN_data', 'MMS1_hc5n_hfs_chunks.npy'),
             'block_interlopers': True,
-            'nruns': 4000,
+            'nruns': 10000,
             'restart': True,
             'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain.npy'),
             'template_run': True
