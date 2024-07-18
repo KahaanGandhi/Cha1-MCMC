@@ -15,6 +15,8 @@ from tqdm import tqdm
 from classes import *
 from constants import *
 
+# TODO: 4.1 vlsr, 1.5 linewdith for, c2 --> mms1 inrease column density by a factor of two
+
 # TODO: modify ObsParams / MolSim to reflect DSN DSS-43 (keeping beam correction in mind)
 # TODO: convert +/- 10 channel iterative mask to frequency space (GOTHAM <> DSN), then reapply corrected channel masking
 # TODO: check on mK vs. K, fix in preprocessing step if needed
@@ -48,6 +50,7 @@ def read_file(filename, restfreqs, int_sim, shift=0.0, GHz=False, plot=False, bl
     data = np.load(filename, allow_pickle=True)
 
     # Unpack data arrays
+    # TODO: apply mK (DSS-43) <--> K (GOTHAM) conversion?
     freqs = data[0]
     intensity = data[1]
     if GHz:
@@ -60,10 +63,10 @@ def read_file(filename, restfreqs, int_sim, shift=0.0, GHz=False, plot=False, bl
 
     # Iterate through rest frequencies to identify their corresponding spectral lines
     for i, rf in enumerate(restfreqs):
-        thresh = 0.05                                                        # Set a threshold as 5% of the peak intensity...
-        if int_sim[i] > thresh * np.max(int_sim):                            # find significant simulated intensities...
-            vel = (rf - freqs) / rf * 300000 + shift                         # calculate velocity shift for each frequency...
-            locs = np.where((vel < (1. + 3.8225)) & (vel > (-1. + 3.8225)))  # and filter for a velocity range
+        thresh = 0.05                                                  # Set a threshold as 5% of the peak intensity...
+        if int_sim[i] > thresh * np.max(int_sim):                      # find significant simulated intensities...
+            vel = (rf - freqs) / rf * 300000 + shift                   # calculate velocity shift for each frequency...
+            locs = np.where((vel < (1. + 4.1)) & (vel > (-1. + 4.1)))  # and filter for a velocity range
 
             if locs[0].size != 0:
                 noise_mean, noise_std = calc_noise_std(intensity[locs])
@@ -103,6 +106,7 @@ def read_file(filename, restfreqs, int_sim, shift=0.0, GHz=False, plot=False, bl
 # Simulate molecular spectral emission lines for a set of observational parameters
 def predict_intensities(source_size, Ncol, Tex, dV, mol_cat):
     obs_params = ObsParams("test", source_size=source_size)
+    # TODO: 0.0 or 4.1?
     sim = MolSim("mol sim", mol_cat, obs_params, [0.0], [Ncol], [dV], [Tex], ll=[18000], ul=[27000], gauss=False)
     freq_sim = sim.freq_sim
     int_sim = sim.int_sim
@@ -138,7 +142,7 @@ def make_model(freqs, intensities, source_size, datagrid_freq, datagrid_vel, vls
     # Compute Gaussian profiles for each line and sum them
     for i in range(num_lines):
         velocity_grid = (freqs[i] - datagrid_freq) / freqs[i] * ckm  # Convert frequency shifts to velocity space
-        mask = np.abs(velocity_grid - 3.8225) < dV * 10
+        mask = np.abs(velocity_grid - 4.1) < dV * 10
         
         # Gaussian profile for the intensity at each frequency point
         model[mask] += intensities[i] * np.exp(-0.5 * ((velocity_grid[mask] - vlsr) / (dV / 2.355))**2.)
@@ -148,7 +152,7 @@ def make_model(freqs, intensities, source_size, datagrid_freq, datagrid_vel, vls
     J_Tbg = (h * datagrid_freq * 10**6 / k) * (np.exp((h * datagrid_freq * 10**6) / (k * 2.7)) - 1)**-1
     
     # Apply the beam dilution correction to the model
-    model = apply_beam(datagrid_freq, (J_T - J_Tbg) * (1 - np.exp(-model)), source_size, 100)
+    model = apply_beam(datagrid_freq, (J_T - J_Tbg) * (1 - np.exp(-model)), source_size, 70)
 
     return model
 
@@ -183,11 +187,11 @@ def is_within_bounds(theta):
     source_size, Ncol, Tex, vlsr, dV = theta
     
     return (
-        0. < source_size < 200 and
+        0. < source_size < 200. and
         0. < Ncol < 10**16. and
         0. < vlsr < 10. and
-        dV < 2. and
-        2.7 < Tex
+        0.5 < dV < 2. and
+        2.7 < Tex < 20.
     )
 
 
@@ -241,12 +245,14 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     # Initialize molecular simulation components
     mol_cat = MolCat(mol_name, catfile)
     obs_params = ObsParams("init", dish_size=70)
+    
+    # TODO: try vlsr=[4.1], and other observational parameters
     sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[0.0], C=[4.5e12], dV=[0.7575], T=[7.1], ll=[18000], ul=[27000], gauss=False)
     freq_sim = np.array(sim.freq_sim)
     int_sim = np.array(sim.int_sim)
     
     # Read and process spectral data
-    print(f"Reading in data from {data_path}")
+    print(f"Reading in data from: {data_path}")
     freqs_DSN, ints_DSN, yerrs_DSN, covered_trans_DSN = read_file(data_path, freq_sim, int_sim, block_interlopers=block_interlopers, plot=False)
     covered_trans_DSN = np.array(covered_trans_DSN, dtype=int)
     
@@ -278,7 +284,8 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
     if template_run:
         # Hardcoded values specific for template species like HC5N
         # Source size, Ncol, Tex, vlsr, dV
-        initial = np.array([50, 4.5e12, 7.1, 3.8225, 0.7575])
+        # 10 K, 3.4e12
+        initial = np.array([48, 4.5e12, 7.1, 4.1, 0.7575])
         # initial = np.array([60 , 4.5e12, 14.0, 3.95, 0.7575]) 
         prior_means = initial
         prior_stds = np.array([6.5, 1.6e12, 0.8, 0.06, 0.22])
@@ -298,7 +305,7 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
         # Perform affine invariant MCMC sampling with Gelman-Rubin convergence
         for _ in tqdm(range(nruns), desc=f"MCMC Sampling for {mol_name}"):
             sampler.run_mcmc(pos, 1)
-            file_name = os.path.join(fit_folder, mol_name, "chain_DSN.npy")
+            file_name = os.path.join(fit_folder, mol_name, "chain.npy")
             np.save(file_name, sampler.chain)
             pos = sampler.chain[:, -1, :]
 
@@ -312,11 +319,11 @@ if __name__ == "__main__":
             'mol_name': 'hc5n_hfs',
             'fit_folder': os.path.join(BASE_DIR, 'DSN_fit_results'),
             'cat_folder': os.path.join(BASE_DIR, 'GOTHAM_catalogs'),
-            'data_path': os.path.join(BASE_DIR, 'DSN_data', 'C2_hc5n_hfs_chunks.npy'),
+            'data_path': os.path.join(BASE_DIR, 'DSN_data', 'MMS1_hc5n_hfs_chunks.npy'),
             'block_interlopers': True,
-            'nruns': 10000,
+            'nruns': 4000,
             'restart': True,
-            'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain_DSN.npy'),
+            'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain.npy'),
             'template_run': True
         }
     
@@ -348,7 +355,7 @@ if __name__ == "__main__":
         ]
 
     # Verify that chain file path matches where data was saved
-    CHAIN_PATH = os.path.join(input_dict['fit_folder'], input_dict['mol_name'], "chain_DSN.npy")
+    CHAIN_PATH = os.path.join(input_dict['fit_folder'], input_dict['mol_name'], "chain.npy")
     if os.path.exists(CHAIN_PATH):
         plot_results(CHAIN_PATH, param_labels)
     else:
