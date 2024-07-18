@@ -1,10 +1,9 @@
-#======================================================================================#
-# Adapted from CASSIS example scripts documentation for DSS-43                         #
-# Uses LineAnalysisScripting module with one component from the LTE model for HC5N     #
-# Performs chi2 computation with the Monte-Carlo Markov Chain algorithm                #
-# CASSIS scripting documentation: http://cassis.irap.omp.eu/docs/script/README.html    #
-# This script might take some time to converge                                         #
-#======================================================================================#
+#============================================================================================#
+# This script performs χ2 computations using the MCMC algorithm for HC5N in the LTE model.   #
+# Adapted from CASSIS documentation, it is designed for execution in CASSIS Jython.          #
+# For more details, visit: http://cassis.irap.omp.eu/docs/script/README.html                 #
+# Note: Execution may take some time.                                                        #
+#============================================================================================#
 
 import time
 import subprocess
@@ -27,7 +26,7 @@ Range.unit          = "km/s"    # Possible units are GHz and km/s, MHz, cm-1 and
 v1                  = Range(2.0, 6.5)
 
 # Define the step of the walkers values in the MCMC. This value must be tuned to keep the acceptance rate within [0.2, 0.5]
-rpp                 = 4
+rpp                 = 16
 
 # Set all what is needed here
 sourceName          = "CHA-MMS1"
