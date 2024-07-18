@@ -190,7 +190,7 @@ def is_within_bounds(theta):
         0. < source_size < 200. and
         0. < Ncol < 10**16. and
         0. < vlsr < 10. and
-        0.5 < dV < 2. and
+        0. < dV < 2. and
         2.7 < Tex < 20.
     )
 

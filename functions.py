@@ -551,8 +551,8 @@ def plot_results(chain_path, param_labels):
     samples = chain.reshape((-1, chain.shape[-1]))
     
     # Generating corner plot
-    fig = corner.corner(samples, labels=param_labels, quantiles=[0.16, 0.5, 0.84], show_titles=True, title_kwargs={"fontsize": 12}, title_fmt=".2e")
-    fig.savefig(f"{chain_path[:-4]}_corner.png")  # Save the figure
+    fig = corner.corner(samples, labels=param_labels, quantiles=[0.16, 0.5, 0.84], show_titles=True, title_kwargs={"fontsize": 10}, title_fmt=".1e")
+    fig.savefig(f"{chain_path[:-4]}_corner.png")
 
     # Plotting trace plots
     n_params = len(param_labels)  # Number of parameters to plot
@@ -564,7 +564,7 @@ def plot_results(chain_path, param_labels):
         ax.set_title(f'Parameter {i+1}: {param_labels[i]}')
         ax.set_xlabel("Step Number")
     plt.tight_layout()
-    fig.savefig(f"{chain_path[:-4]}_trace.png")  # Save the figure
+    fig.savefig(f"{chain_path[:-4]}_trace.png")
 
     format_value = lambda x: f"{x:.2e}" if abs(x) < 1e-3 or abs(x) > 1e3 else f"{x:.5f}"
     print("\nParameter Estimates:")
