@@ -22,19 +22,20 @@ from Plot import Plot
 #======================================================================================#
 
 # Define the velocity ranges for the lines
-Range.unit          = "km/s"    # Possible units are GHz and km/s, MHz, cm-1 and micrometer
+Range.unit          = "km/s"  # Available units: GHz, km/s, MHz, cm-1, micrometer
 v1                  = Range(2.0, 6.5)
 
-# Define the step of the walkers values in the MCMC. This value must be tuned to keep the acceptance rate within [0.2, 0.5]
+# Define the step size for MCMC walkers; tune to maintain acceptance rate within [0.2, 0.5]
 rpp                 = 16
 
-# Set all what is needed here
+# Initialize source, species, and model names
 sourceName          = "CHA-MMS1"
 speciesName         = "HC5N"
 myModel             = "1C_lte"
 myName              = sourceName+"_"+speciesName+"_"+myModel
 
-# To be changed for your own myDirInput & myDirOutput folder for your own scripts
+# Local configuration for paths to Python executable and Cassis directories
+myPython            = "/Users/kahaan/anaconda3/envs/myenv/bin/python"  # print(sys.executable) to find path
 cassisDataPath      = Software.getCassisPath()+"/delivery/data/"
 cassisScriptsPath   = Software.getCassisPath()+"/delivery/script/examples/"
 myDirInput          = cassisDataPath
@@ -97,7 +98,7 @@ size 		        = {'min':5,      'max':200,    'nstep':1, 'log_mode':False},
 vlsr 		        = {'min':3.6,    'max':5.0,    'nstep':1, 'log_mode':False},
 iso                 = {'min':1.0,    'max':1.0,    'nstep':1, 'log_mode':False},
 interacting         = True,
-reducePhysicalParam = {"nmol": rpp,    "temp": rpp,    "fwhm": rpp,  "size": rpp, "vlsr": rpp, "iso": rpp},
+reducePhysicalParam = {"nmol": rpp, "temp": rpp, "fwhm": rpp, "size": rpp, "vlsr": rpp, "iso": rpp},
 model               = "lte",
 
 # Only needed for RADEX:
@@ -109,7 +110,12 @@ geometry            = "sphere"  # Alternatively, geometry = "slab"
 
 # Set the initial parameters by specifying the keys and and the values
 # Empty dictionary means random initial parameter
-params_1            = {"nmol": 3.4e12, "fwhm": 1.0, "vlsr": 4.1, "temp": 11.0, "size" : 50}
+params_1            = {"nmol": 3.4e12, 
+                       "fwhm": 1.0, 
+                       "vlsr": 4.1, 
+                       "temp": 11.0, 
+                       "size" : 50
+}
 
 # Set the walker and burning values
 drawNumber          = 10000   # The higher this value (the longer the execution time), the wider the area visited in the space of the χ2. 
@@ -130,7 +136,7 @@ userInputs.computeChi2MinUsingMCMC(drawNumber, cutOff, ratioAtCutOff)
 #=============================================================================#
 
 # A. Plot the best model and save the corresponding spectra and config files
-lineModel           = userInputs.plotBestModel(moltag = 75503, overSampling=3, tuningBand = 60, telescope = "dsn")
+lineModel = userInputs.plotBestModel(moltag=userInputs.moltags[0], overSampling=3, tuningBand=userInputs.tuningBand, telescope=userInputs.telescope)
 lineModel.saveConfig(File(myDirOutput+myName+".lam"))
 bestPhysicalModels  = userInputs.getBestPhysicalModels()
 userInputs.saveBestPhysicalModels(myDirOutput+myName+"_bestModel.lis")
@@ -154,11 +160,9 @@ timeEnd             = time.time()
 print("CASSIS execution time =", timeEnd - timeStart)
 
 # D. Launch the triangle plot in python
-# Set the correct path for your python here !
-myPython            = "/Users/kahaan/anaconda3/envs/myenv/bin/python"
 myPythonScript      = cassisScriptsPath+"Plots_MCMC.py"
 # Set the fraction of rejected walkers here !
-fracOfRejWalkers    = "0.1"
+fracOfRejWalkers    = "0.2"
 trianglePlot        = [myPython+" "+myPythonScript+" "+myDirOutput+" "+myName+" "+fracOfRejWalkers]
 subprocess.Popen(trianglePlot, shell=True)
 # ==============================================================================
