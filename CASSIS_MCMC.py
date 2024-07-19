@@ -22,8 +22,11 @@ from Plot import Plot
 #======================================================================================#
 
 # Define the velocity ranges for the lines
-Range.unit          = "km/s"  # Available units: GHz, km/s, MHz, cm-1, micrometer
-v1                  = Range(2.0, 6.5)
+Range.unit          = "GHz"  # Available units: GHz, km/s, MHz, cm-1, micrometer
+r1                  = Range(18.636757026174, 18.640450306727)
+r2                  = Range(21.299122714198, 21.303395931368)
+r3                  = Range(23.961512293599, 23.966304401425)
+r4                  = Range(26.623869424849, 26.629180423656)
 
 # Define the step size for MCMC walkers; tune to maintain acceptance rate within [0.2, 0.5]
 rpp                 = 16
@@ -65,7 +68,7 @@ warning             = True,
 
 # Enter here the lines and the corresponding ranges to be taken into account in the computation
 # The lines should be sorted by increasing frequency.
-selectedLines       = {"1-4": v1}, 
+selectedLines       = {"1": r1, "2": r2, "3": r3, "4": r4}, 
 
 # rms of the data around each selected line (in K)
 rmsLines            = {"1-4": 0.01},
