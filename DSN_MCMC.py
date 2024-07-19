@@ -15,8 +15,6 @@ from tqdm import tqdm
 from classes import *
 from constants import *
 
-# TODO: 4.1 vlsr, 1.5 linewdith for, c2 --> mms1 inrease column density by a factor of two
-
 # TODO: modify ObsParams / MolSim to reflect DSN DSS-43 (keeping beam correction in mind)
 # TODO: convert +/- 10 channel iterative mask to frequency space (GOTHAM <> DSN), then reapply corrected channel masking
 # TODO: check on mK vs. K, fix in preprocessing step if needed
@@ -24,6 +22,8 @@ from constants import *
 # TODO: try simulating best fit parameters w/ LTE CASSIS
 # TODO: implement other run times (non template path, non restart)
 # TODO: verify vlsr for each source, and mask_radius
+# TODO: try slicing out the noisiest part of the data
+# TODO: add logging instead of print statements
 
 # Calculates local RMS noise in a given spectrum by iteratively masking outliers. 3.5σ default, 6σ for weaker species. 
 def calc_noise_std(intensity, threshold=3.5):
@@ -50,7 +50,6 @@ def read_file(filename, restfreqs, int_sim, shift=0.0, GHz=False, plot=False, bl
     data = np.load(filename, allow_pickle=True)
 
     # Unpack data arrays
-    # TODO: apply mK (DSS-43) <--> K (GOTHAM) conversion?
     freqs = data[0]
     intensity = data[1]
     if GHz:
@@ -106,8 +105,8 @@ def read_file(filename, restfreqs, int_sim, shift=0.0, GHz=False, plot=False, bl
 # Simulate molecular spectral emission lines for a set of observational parameters
 def predict_intensities(source_size, Ncol, Tex, dV, mol_cat):
     obs_params = ObsParams("test", source_size=source_size)
-    # TODO: 0.0 or 4.1?
-    sim = MolSim("mol sim", mol_cat, obs_params, [0.0], [Ncol], [dV], [Tex], ll=[18000], ul=[27000], gauss=False)
+    # TODO: 0.0 or 4.1? CHECK HERE AND
+    sim = MolSim("mol sim", mol_cat, obs_params, [4.1], [Ncol], [dV], [Tex], ll=[18000], ul=[27000], gauss=False)
     freq_sim = sim.freq_sim
     int_sim = sim.int_sim
     tau_sim = sim.tau_sim
@@ -187,11 +186,11 @@ def is_within_bounds(theta):
     source_size, Ncol, Tex, vlsr, dV = theta
     
     return (
-        0. < source_size < 200. and
-        0. < Ncol < 10**16. and
-        0. < vlsr < 10. and
-        0.2 < dV < 2. and
-        2.7 < Tex < 20.
+        10. < source_size < 100. and
+        10**8. < Ncol < 10**14. and
+        3.0 < vlsr < 5.0 and
+        0.2 < dV < 1.5 and
+        5.0 < Tex < 20.
     )
 
 
@@ -216,7 +215,8 @@ def lnprior(theta, prior_stds, prior_means):
     log_prior_vlsr = np.log(1.0 / (np.sqrt(2 * np.pi) * std_vlsr)) - 0.5 * ((vlsr - mean_vlsr) ** 2 / std_vlsr ** 2)
     log_prior_dV = np.log(1.0 / (np.sqrt(2 * np.pi) * std_dV)) - 0.5 * ((dV - mean_dV) ** 2 / std_dV ** 2)
 
-    return log_prior_source_size + log_prior_Tex + log_prior_vlsr + log_prior_dV
+    # Vary weight to incenvitize/punish exploration from previously succesful observational parameters
+    return 1.0 * (log_prior_source_size + log_prior_Tex + log_prior_vlsr + log_prior_dV)
 
 
 # Log-probability for MCMC, evaluating model parameters with both prior distribution and observed fit
@@ -247,7 +247,7 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     obs_params = ObsParams("init", dish_size=70)
     
     # TODO: try vlsr=[4.1], and other observational parameters
-    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[0.0], C=[3.4e12], dV=[0.7575], T=[10.0], ll=[18000], ul=[27000], gauss=False)
+    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[4.1], C=[3.4e12], dV=[0.7575], T=[10.0], ll=[18000], ul=[27000], gauss=False)
     freq_sim = np.array(sim.freq_sim)
     int_sim = np.array(sim.int_sim)
     
@@ -282,17 +282,38 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
 
     # Choose initial parameters and perturbations based on the run type
     if template_run:
-        # Hardcoded values specific for template species like HC5N
-        # Source size, Ncol, Tex, vlsr, dV
-        # 10 K, 3.4e12
+        # Hardcoded values specific for template species like HC5N (Source size, Ncol, Tex, vlsr, dV)
         initial = np.array([48, 3.4e12, 10.0, 4.1, 0.7575])
-        # initial = np.array([60 , 4.5e12, 14.0, 3.95, 0.7575]) 
         prior_means = initial
-        prior_stds = np.array([6.5, 1.6e12, 0.8, 0.06, 0.22])
-        print(f"Using hardcoded priors for a template run of {mol_name}.")
+        prior_stds = np.array([6.5, 0.34e11, 0.8, 0.06, 0.22])
+        print(f"Using hardcoded priors and initial positions for a template run of {mol_name}.")
     else:
-        print("This type of run is not set up for HC5N yet, aborting simulation.")
-        exit()
+        # Load priors from previous chain data
+        if not os.path.exists(prior_path):
+            raise FileNotFoundError(f"The prior path {prior_path} could not be found.")
+        print(f"Loading previous chain data from: {prior_path}")
+        psamples = np.load(prior_path).T
+        print(f"Dimensions of samples loaded from chain: {psamples.shape}")
+        
+        prior_means = np.mean(np.percentile(psamples, 50, axis=1), axis=1)
+        percentile_16 = np.mean(np.percentile(psamples, 16, axis=1), axis=1)
+        percentile_84 = np.mean(np.percentile(psamples, 84, axis=1), axis=1)
+        prior_stds = np.abs((percentile_16 + percentile_84 - 2 * prior_means) / 2.)
+        print("Loading priors from chain.")
+        
+        if prior_means.shape == (5,) and prior_stds.shape == (5,) and prior_means.ndim == 1 and prior_stds.ndim == 1:
+            print("Priors are correctly shaped as 1-dimensional arrays with 5 elements each.")
+        else:
+            raise ValueError("Error: priors should be 1-dimensional arrays with 5 elements each.")
+        
+        if restart:
+            # TODO: change this to be an arbitrary "tight ball" -- not specific to HC5N
+            initial = np.array([48, 3.4e12, 10.0, 4.1, 0.7575])
+            print("Using hardcoded initial positions.")
+        else:
+            chain_data = np.load(os.path.join(fit_folder, mol_name, "chain.npy"))[:,-200:,:].reshape(-1, ndim).T
+            initial = np.median(chain_data, axis=1)
+            print("Loading initial positions from chain.")
     
     # Initialize walkers with a small perturbation relative to the prior standard deviations
     perturbation = np.array([1.e-1, 1.e11, 1.e-3, 1.e-3, 1.e-3])
@@ -321,7 +342,7 @@ if __name__ == "__main__":
             'cat_folder': os.path.join(BASE_DIR, 'GOTHAM_catalogs'),
             'data_path': os.path.join(BASE_DIR, 'DSN_data', 'MMS1_hc5n_hfs_chunks.npy'),
             'block_interlopers': True,
-            'nruns': 10000,
+            'nruns': 4000,
             'restart': True,
             'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain.npy'),
             'template_run': True

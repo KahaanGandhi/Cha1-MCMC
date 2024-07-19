@@ -29,7 +29,7 @@ r3                  = Range(23.961512293599, 23.966304401425)
 r4                  = Range(26.623869424849, 26.629180423656)
 
 # Define the step size for MCMC walkers; tune to maintain acceptance rate within [0.2, 0.5]
-rpp                 = 16
+rpp                 = 32
 
 # Initialize source, species, and model names
 sourceName          = "CHA-MMS1"
@@ -94,11 +94,11 @@ observing_mode      = "PSw/DBSw"  # Alternatively observing_mode = "FSw",
 
 comp_1              = Component(
 # Needed for LTE and RADEX:
-nmol 		        = {'min':1.0e12, 'max':1.0e14, 'nstep':1, 'log_mode':False},
-temp 		        = {'min':5.0,    'max':15.0,   'nstep':1, 'log_mode':False},
-fwhm 		        = {'min':0.5,    'max':2.0,    'nstep':1, 'log_mode':False},
-size 		        = {'min':5,      'max':200,    'nstep':1, 'log_mode':False},
-vlsr 		        = {'min':3.6,    'max':5.0,    'nstep':1, 'log_mode':False},
+nmol 		        = {'min':1.0e8,  'max':1.0e14, 'nstep':1, 'log_mode':False},
+temp 		        = {'min':5.0,    'max':20.0,   'nstep':1, 'log_mode':False},
+fwhm 		        = {'min':0.2,    'max':1.5,    'nstep':1, 'log_mode':False},
+size 		        = {'min':10,     'max':100,    'nstep':1, 'log_mode':False},
+vlsr 		        = {'min':3.0,    'max':5.0,    'nstep':1, 'log_mode':False},
 iso                 = {'min':1.0,    'max':1.0,    'nstep':1, 'log_mode':False},
 interacting         = True,
 reducePhysicalParam = {"nmol": rpp, "temp": rpp, "fwhm": rpp, "size": rpp, "vlsr": rpp, "iso": rpp},
@@ -121,7 +121,7 @@ params_1            = {"nmol": 3.4e12,
 }
 
 # Set the walker and burning values
-drawNumber          = 10000   # The higher this value (the longer the execution time), the wider the area visited in the space of the χ2. 
+drawNumber          = 8000   # The higher this value (the longer the execution time), the wider the area visited in the space of the χ2. 
 cutOff              = 1
 ratioAtCutOff       = 1  # Value must be <=1
 
