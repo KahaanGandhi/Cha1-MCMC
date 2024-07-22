@@ -246,7 +246,6 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     mol_cat = MolCat(mol_name, catfile)
     obs_params = ObsParams("init", dish_size=70)
     
-    # TODO: try vlsr=[4.1], and other observational parameters
     sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[4.1], C=[3.4e12], dV=[0.7575], T=[10.0], ll=[18000], ul=[27000], gauss=False)
     freq_sim = np.array(sim.freq_sim)
     int_sim = np.array(sim.int_sim)
@@ -369,9 +368,9 @@ if __name__ == "__main__":
 
     param_labels = [
             'Source Size #1 [″]', 
-            'Ncol #1 [cm⁻²]', 
-            'Tex [K]',
-            'vlsr #1 [km s⁻¹]', 
+            'Nᴄᴏʟ #1 [cm⁻²]', 
+            'Tᴇx [K]',
+            'ᴠʟsʀ #1 [km s⁻¹]', 
             'dV [km s⁻¹]'
         ]
 
