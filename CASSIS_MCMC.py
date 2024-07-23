@@ -23,16 +23,21 @@ from Plot import Plot
 
 # Define the velocity ranges for the lines
 Range.unit          = "GHz"  # Available units: GHz, km/s, MHz, cm-1, micrometer
-r1                  = Range(18.636757026174, 18.640450306727)
-r2                  = Range(21.299122714198, 21.303395931368)
-r3                  = Range(23.961512293599, 23.966304401425)
-r4                  = Range(26.623869424849, 26.629180423656)
+# r1                  = Range(18.636757026174, 18.640450306727)
+# r2                  = Range(21.299122714198, 21.303395931368)
+# r3                  = Range(23.961512293599, 23.966304401425)
+# r4                  = Range(26.623869424849, 26.629180423656)
+
+r1                  = Range(18.636742833902, 18.640466636072)
+r2                  = Range(21.299119339272, 21.303392554877)
+r3                  = Range(23.961502431189, 23.966294537261)
+r4                  = Range(26.623881378297, 26.629192374511)
 
 # Define the step size for MCMC walkers; tune to maintain acceptance rate within [0.2, 0.5]
 rpp                 = 32
 
 # Initialize source, species, and model names
-sourceName          = "CHA-MMS1"
+sourceName          = "CHA-C2"
 speciesName         = "HC5N"
 myModel             = "1C_lte"
 myName              = sourceName+"_"+speciesName+"_"+myModel
@@ -43,7 +48,8 @@ cassisDataPath      = Software.getCassisPath()+"/delivery/data/"
 cassisScriptsPath   = Software.getCassisPath()+"/delivery/script/examples/"
 myDirInput          = cassisDataPath
 myDirOutput         = cassisDataPath
-inputFile           = myDirInput+"CHA-MMS1_HC5N.lis"
+# inputFile           = myDirInput+"CHA-MMS1_HC5N.lis"
+inputFile           = myDirInput+"cha-c2-hc5n.lis"
 outputFile          = myDirOutput+myName+".dat"
 
 #======================================================================================#
@@ -94,10 +100,10 @@ observing_mode      = "PSw/DBSw"  # Alternatively observing_mode = "FSw",
 
 comp_1              = Component(
 # Needed for LTE and RADEX:
-nmol 		        = {'min':1.0e8,  'max':1.0e14, 'nstep':1, 'log_mode':False},
-temp 		        = {'min':5.0,    'max':20.0,   'nstep':1, 'log_mode':False},
+nmol 		        = {'min':1.0e10, 'max':1.0e14, 'nstep':1, 'log_mode':False},
+temp 		        = {'min':7.0,    'max':17.0,   'nstep':1, 'log_mode':False},
 fwhm 		        = {'min':0.2,    'max':1.5,    'nstep':1, 'log_mode':False},
-size 		        = {'min':10,     'max':100,    'nstep':1, 'log_mode':False},
+size 		        = {'min':30,     'max':90,    'nstep':1, 'log_mode':False},
 vlsr 		        = {'min':3.0,    'max':5.0,    'nstep':1, 'log_mode':False},
 iso                 = {'min':1.0,    'max':1.0,    'nstep':1, 'log_mode':False},
 interacting         = True,
@@ -117,11 +123,11 @@ params_1            = {"nmol": 3.4e12,
                        "fwhm": 1.0, 
                        "vlsr": 4.1, 
                        "temp": 11.0, 
-                       "size" : 50
+                       "size": 50
 }
 
 # Set the walker and burning values
-drawNumber          = 8000   # The higher this value (the longer the execution time), the wider the area visited in the space of the χ2. 
+drawNumber          = 80000   # The higher this value (the longer the execution time), the wider the area visited in the space of the χ2. 
 cutOff              = 1
 ratioAtCutOff       = 1  # Value must be <=1
 
