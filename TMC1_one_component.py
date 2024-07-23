@@ -256,7 +256,6 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
         prior_stds = np.array([6.5, 0.215e13, 0.1, 0.0035, 0.002])  # HC9N
         print(f"Using hardcoded priors for a template run of {mol_name}.")
     else:
-        
         # Load priors from previous chain data or specified path
         if not os.path.exists(prior_path):
             raise FileNotFoundError(f"The prior path {prior_path} could not be found.")

@@ -1,4 +1,5 @@
 # ----------------------------------------------------------------------------------
+# Developer: Kahaan Gandhi
 # Based on methodologies described in:
 # Loomis, R.A. et al., Nat Astron 5, 188–196 (2021), DOI: 10.1038/s41550-020-01261-4
 # Extends prior scripts for spectral simulation and MCMC inference.
@@ -11,7 +12,93 @@ import corner
 import matplotlib.pyplot as plt
 from constants import *
 
+# Generate corner (scatterplot matrices) and trace (time-series) plots
+def plot_results(chain_path, param_labels):
+    param_labels_latex = [
+        r'Source Size [$^{\prime\prime}$]', 
+        r'N$_{\mathrm{col}}$ [cm$^{-2}$]',
+        r'T$_{\mathrm{ex}}$ [K]',
+        r'v$_{\mathrm{lsr}}$ [km s$^{-1}$]', 
+        r'dV [km s$^{-1}$]'
+    ]
+    
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.size": 12
+    })
+    
+    # Load the MCMC chain
+    chain = np.load(chain_path)
+    
+    # Remove burn-in (first 20% of steps)
+    burn_in = int(0.2 * chain.shape[1])
+    chain = chain[:, burn_in:, :]
+    
+    # Reshape the chain to (nwalkers*nsteps, ndim)
+    samples = chain.reshape((-1, chain.shape[-1]))
+    
+    # Custom title formatter for corner plot
+    def custom_title_formatter(param_index):
+        mcmc = np.percentile(samples[:, param_index], [16, 50, 84])
+        q = np.diff(mcmc)
+        value = mcmc[1]
+        lower = q[0]
+        upper = q[1]
+        
+        if abs(value) < 1e-3 or abs(value) > 1e3:
+            base_str = f"{value / 10**np.floor(np.log10(value)):.2f}"
+            lower_str = f"{lower / 10**np.floor(np.log10(value)):.2f}"
+            upper_str = f"{upper / 10**np.floor(np.log10(value)):.2f}"
+            exponent = int(np.floor(np.log10(value)))
+            value_str = f"({base_str}_{{-{lower_str}}}^{{+{upper_str}}}) \\times 10^{{{exponent}}}"
+        else:
+            value_str = f"{value:.2f}"
+            lower_str = f"{lower:.2f}"
+            upper_str = f"{upper:.2f}"
+            value_str = f"{value_str}^{{+{upper_str}}}_{{-{lower_str}}}"
+        
+        return f"${value_str}$"
+    
+    # Generate corner plot
+    fig = corner.corner(samples, labels=param_labels_latex, quantiles=[0.16, 0.5, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
+    axes = np.array(fig.axes).reshape((len(param_labels_latex), len(param_labels_latex)))
+    
+    for i in range(len(param_labels_latex)):
+        title = custom_title_formatter(i)
+        axes[i, i].set_title(f"{param_labels_latex[i]}: {title}", fontsize=12)
+    
+    fig.savefig(f"{chain_path[:-4]}_corner.png")
 
+    # Generate trace plots
+    n_params = len(param_labels)  # Number of parameters to plot
+    fig, axes = plt.subplots(nrows=n_params, figsize=(10, 2 * n_params))
+    if n_params == 1:
+        axes = [axes]  # Make it iterable if only one parameter
+    for i, ax in enumerate(axes):
+        ax.plot(chain[:, :, i].T, color="k", alpha=0.3)
+        ax.set_title(f'Parameter {i+1}: {param_labels_latex[i]}')
+        ax.set_xlabel("Step Number")
+    plt.tight_layout()
+    fig.savefig(f"{chain_path[:-4]}_trace.png")
+
+    print("\033[96m\nParameter Estimates:\033[0m")
+    for i, label in enumerate(param_labels):
+        mcmc = np.percentile(samples[:, i], [16, 50, 84])
+        q = np.diff(mcmc)
+        if abs(mcmc[1]) < 1e-3 or abs(mcmc[1]) > 1e3:
+            median = f"{mcmc[1]:.2e}"
+            lower = f"{q[0]:.2e}"
+            upper = f"{q[1]:.2e}"
+        else:
+            median = f"{mcmc[1]:.5f}"
+            lower = f"{q[0]:.5f}"
+            upper = f"{q[1]:.5f}"
+        print(f'\033[96m{label}: {median} [-{lower} +{upper}]\033[0m')
+    print()
+
+
+# Everything below this remains unchanged from the original spectral simulator codebase.
 # Calculate a partition function at a given T.  The catalog used must have enough lines in it to fully capture the partition function, or the result will not be accurate for Q.
 def calc_q(catalog, T):
     Q = 0.
@@ -27,7 +114,7 @@ def calc_q(catalog, T):
  #Hard code for SH.  Completely unreliable below 2.735 K or above 300 K.
 
     elif 'h2s.cat' in catalog.catalog_file.lower():
-        Q = -0.000004859941547*T**3 + 0.005498622332982*T**2 + 0.507648423477309*T - 1.764494755639740 #Hard code for H2S.  Completely unreliable below 2.735 K or above 300 K.
+        Q  = -0.000004859941547*T**3 + 0.005498622332982*T**2 + 0.507648423477309*T - 1.764494755639740 #Hard code for H2S.  Completely unreliable below 2.735 K or above 300 K.
     
     elif 'hcn.cat' in catalog.catalog_file.lower():
         Q = -1.64946939*10**-9*T**4 + 4.62476813*10**-6*T**3 - 1.15188755*10**-3*T**2 + 1.48629408*T + .386550361
@@ -420,9 +507,6 @@ def trim_array(array,frequency,ll,ul):
     return trimmed_array
 
 
-
-
-
 # Simulates Gaussian profiles for lines, after the intensities have been calculated.  Tries to be smart with how large a range it simulates over, for computational resources.  Includes a thermal cutoff for optically-thick lines.            
 def sim_gaussian(molsim, int_sim, freq, comp_idx, chunk_idx):
     freq_gauss_tmp = []
@@ -531,46 +615,3 @@ def apply_beam(frequency, intensity, source_size, dish_size):
     intensity_diluted *= dilution_factor
     
     return intensity_diluted
-
-
-def plot_results(chain_path, param_labels):
-    plt.rcParams.update({
-        "text.usetex": False,
-        "font.family": "DejaVu Sans"
-    })
-    
-    # Load the MCMC chain
-    chain = np.load(chain_path)
-    
-    # Remove burn-in (first 20% of steps)
-    burn_in = int(0.2 * chain.shape[1])
-    chain = chain[:, burn_in:, :]
-    
-    # Reshape the chain to (nwalkers*nsteps, ndim)
-    samples = chain.reshape((-1, chain.shape[-1]))
-    
-    # Generating corner plot
-    fig = corner.corner(samples, labels=param_labels, quantiles=[0.16, 0.5, 0.84], show_titles=True, title_kwargs={"fontsize": 10}, title_fmt=".1e")
-    fig.savefig(f"{chain_path[:-4]}_corner.png")
-
-    # Plotting trace plots
-    n_params = len(param_labels)  # Number of parameters to plot
-    fig, axes = plt.subplots(nrows=n_params, figsize=(10, 2 * n_params))
-    if n_params == 1:
-        axes = [axes]  # Make it iterable if only one parameter
-    for i, ax in enumerate(axes):
-        ax.plot(chain[:, :, i].T, color="k", alpha=0.3)
-        ax.set_title(f'Parameter {i+1}: {param_labels[i]}')
-        ax.set_xlabel("Step Number")
-    plt.tight_layout()
-    fig.savefig(f"{chain_path[:-4]}_trace.png")
-
-    format_value = lambda x: f"{x:.2e}" if abs(x) < 1e-3 or abs(x) > 1e3 else f"{x:.5f}"
-    print("\nParameter Estimates:")
-    for i, label in enumerate(param_labels):
-        mcmc = np.percentile(samples[:, i], [16, 50, 84])
-        q = np.diff(mcmc)
-        median = format_value(mcmc[1])
-        lower = format_value(q[0])
-        upper = format_value(q[1])
-        print(f'{label}: {median} [-{lower} +{upper}]')
