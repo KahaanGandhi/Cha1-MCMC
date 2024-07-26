@@ -7,6 +7,7 @@
 
 import numpy as np
 from numpy import exp as exp
+from tabulate import tabulate
 import time as tm
 import corner
 import matplotlib.pyplot as plt
@@ -81,8 +82,9 @@ def plot_results(chain_path, param_labels):
         ax.set_xlabel("Step Number")
     plt.tight_layout()
     fig.savefig(f"{chain_path[:-4]}_trace.png")
-
-    print("\033[96m\nParameter Estimates:\033[0m")
+    
+    # Generate table of parameter estimates and uncertainties
+    table = []
     for i, label in enumerate(param_labels):
         mcmc = np.percentile(samples[:, i], [16, 50, 84])
         q = np.diff(mcmc)
@@ -94,9 +96,11 @@ def plot_results(chain_path, param_labels):
             median = f"{mcmc[1]:.5f}"
             lower = f"{q[0]:.5f}"
             upper = f"{q[1]:.5f}"
-        print(f'\033[96m{label}: {median} [-{lower} +{upper}]\033[0m')
-    print()
+        table.append([label, median, lower, upper])
 
+    headers = ["Parameter", "Median Estimate", "Lower Uncertainty", "Upper Uncertainty"]
+    colalign = ["center"] * len(headers)
+    print("\n" + tabulate(table, headers=headers, tablefmt="grid", colalign=colalign) + "\n")
 
 # Everything below this remains unchanged from the original spectral simulator codebase.
 # Calculate a partition function at a given T.  The catalog used must have enough lines in it to fully capture the partition function, or the result will not be accurate for Q.
