@@ -36,7 +36,7 @@ r3                  = Range(23.961502431189, 23.966294537261)
 r4                  = Range(26.623881378297, 26.629192374511)
 
 # Define the step size for MCMC walkers; tune to maintain acceptance rate within [0.2, 0.5]
-rpp                 = 32
+rpp                 = 20
 
 # Initialize source, species, and model names
 sourceName          = "CHA-C2"
@@ -65,7 +65,7 @@ tuningRange         = [18, 28],         # Frequency range to be used (in GHz)
 tuningBand          = 60,               # Width on which spectra are taken (in km/s)
 aijMin              = 1.0e-7,           # Minimum value for Einstein coefficient
 eup           	    = [0.0, 30.0], 
-kup           	    = ["*","*"],
+kup           	    = ["*","*"],        
 template            = "Full CDMS",      # Options: "FULL CMDS", "Full JPL", "Full VASTEL" etc...
 moltags             = [75503],
 tmb2ta              = False,            # Whether data is main beam temperature (False) or antenna temperature (True)
@@ -129,7 +129,7 @@ params_1            = {"nmol": 3.4e12,
 }
 
 # Set the walker and burning values
-drawNumber          = 20000   # The higher this value (the longer the execution time), the wider the area visited in the space of the χ2. 
+drawNumber          = 50000   # The higher this value (the longer the execution time), the wider the area visited in the space of the χ2. 
 cutOff              = 1
 ratioAtCutOff       = 1  # Value must be <=1
 
