@@ -354,7 +354,7 @@ if __name__ == "__main__":
     input_dict = {
         'mol_name': 'hc7n_hfs',
         'fit_folder': os.path.join(BASE_DIR, 'GOTHAM_fit_results'),
-        'cat_folder': os.path.join(BASE_DIR, 'GOTHAM_catalogs'),
+        'cat_folder': os.path.join(BASE_DIR, 'CDMS_catalog'),
         'data_path': os.path.join(BASE_DIR, 'GOTHAM_data', 'hc7n_hfs_chunks.npy'),
         'block_interlopers': True,
         'nruns': 10000,

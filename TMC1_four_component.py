@@ -383,7 +383,7 @@ if __name__ == "__main__":
     input_dict = {
         'mol_name': 'hc11n',
         'fit_folder': os.path.join(BASE_DIR, 'GOTHAM_fit_results'),
-        'cat_folder': os.path.join(BASE_DIR, 'GOTHAM_catalogs'),
+        'cat_folder': os.path.join(BASE_DIR, 'CDMS_catalog'),
         'data_path': os.path.join(BASE_DIR, 'GOTHAM_data', 'hc11n_chunks.npy'),
         'block_interlopers': True,
         'nruns': 10000,
