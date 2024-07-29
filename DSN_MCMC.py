@@ -15,13 +15,11 @@ from tqdm import tqdm
 from classes import *
 from constants import *
 
-# TODO: modify ObsParams / MolSim to reflect DSN DSS-43 (keeping beam correction in mind)
-# TODO: convert +/- 10 channel iterative mask to frequency space (GOTHAM <> DSN), then reapply corrected channel masking
-# TODO: check on mK vs. K, fix in preprocessing step if needed
-# TODO: try simulating best fit parameters w/ LTE CASSIS
-# TODO: implement other run times (non template path, non restart)
-# TODO: verify vlsr for each source, and mask_radius
-
+# TODO: try simulating best fit parameters w/ LTE CASSIS to overlay
+# TODO: get successful CASSIS run w/ sufficinetly large runtime
+# TODO: get successful LOOMIS runs with and without 4th line
+# TODO: investigate hardcoded frequency correction
+# TODO: submit SURF@JPL abstract to JPL URS
 
 # Calculates local RMS noise in a given spectrum by iteratively masking outliers. 3.5σ default, 6σ for weaker species. 
 def calc_noise_std(intensity, threshold=3.5):
@@ -32,7 +30,7 @@ def calc_noise_std(intensity, threshold=3.5):
 
     # Repeat 3 times to make sure to avoid any interloping lines
     for _ in range(3):
-        mask_radius = 3  # Channel range to mask adjacents values (GOTHAM applied +/- 10 channel mask for 1.4kHz frequency resolution)
+        mask_radius = 3  # Channel range to mask adjacents values
         for chan in np.where(dummy_ints - dummy_mean < (-dummy_std * threshold))[0]:
             noise[chan - mask_radius : chan + mask_radius] = np.nan
         for chan in np.where(dummy_ints - dummy_mean > (dummy_std * threshold))[0]:
@@ -44,7 +42,7 @@ def calc_noise_std(intensity, threshold=3.5):
 
 
 # Reads in the data, returns the data which has coverage of a given species (from simulated intensities)
-def read_file(filename, restfreqs, int_sim, shift=0.00, GHz=False, plot=False, block_interlopers=True):
+def read_file(filename, restfreqs, int_sim, shift=4.1, GHz=False, plot=False, block_interlopers=True):
     data = np.load(filename, allow_pickle=True)
 
     # Unpack data arrays
@@ -52,11 +50,6 @@ def read_file(filename, restfreqs, int_sim, shift=0.00, GHz=False, plot=False, b
     intensity = data[1]
     if GHz:
         freqs *= 1000.
-    if "corrected" in filename:
-        frequency_correction = 0.220585
-        freqs -= frequency_correction
-        equivalent_shift = (frequency_correction / np.mean(restfreqs)) * ckm
-        print(f"Equivalent shift for the frequency correction of {frequency_correction} MHz is: {equivalent_shift} km/s")
 
     relevant_freqs = np.zeros(freqs.shape)
     relevant_intensity = np.zeros(intensity.shape)
@@ -65,9 +58,9 @@ def read_file(filename, restfreqs, int_sim, shift=0.00, GHz=False, plot=False, b
 
     # Iterate through rest frequencies to identify their corresponding spectral lines
     for i, rf in enumerate(restfreqs):
-        thresh = 0.05                                                  # Set a threshold as 5% of the peak intensity...
-        if int_sim[i] > thresh * np.max(int_sim):                      # find significant simulated intensities...
-            vel = (rf - freqs) / rf * ckm + shift                      # calculate velocity shift for each frequency...
+        thresh = 0.05                                                    # Set a threshold as 5% of the peak intensity...
+        if int_sim[i] > thresh * np.max(int_sim):                        # find significant simulated intensities...
+            vel = (rf - freqs) / rf * ckm + shift                        # calculate velocity shift for each frequency...
             locs = np.where((vel < (1.2 + 4.1)) & (vel > (-1.2 + 4.1)))  # and filter for a velocity range
 
             if locs[0].size != 0:
@@ -96,37 +89,15 @@ def read_file(filename, restfreqs, int_sim, shift=0.00, GHz=False, plot=False, b
     relevant_intensity = relevant_intensity[mask]
     relevant_yerrs = relevant_yerrs[mask]
     
-    plt.plot(relevant_freqs, relevant_intensity)
-    plt.scatter(relevant_freqs, relevant_intensity)
-    plt.xlim(18638,18639)
-    plt.show()
+    # A hardcoded shift correction...
+    relevant_freqs -= 0.367
     
-    # TODO: take a look at our masked spectrum here, with plots...
-    # plt.scatter(relevant_freqs, relevant_intensity)
-    # plt.plot(relevant_freqs, relevant_intensity)
-    # plt.show()
-    # exit()
-    
-    # relevant_freqs = np.array([
-    # 18638.29258076, 18638.32310373, 18638.3536267, 18638.38414967, 18638.41467264,
-    # 21300.88983921, 21300.92036218, 21300.95088515, 21300.98140811, 21301.01193108,
-    # 21301.04245405, 23963.51043032, 23963.54095329, 23963.57147626, 23963.60199923,
-    # 23963.63252219, 23963.66304516, 26626.0967023, 26626.12722526, 26626.15774823,
-    # 26626.1882712, 26626.21879417, 26626.24931713])
-    
-    # relevant_intensity = np.array([
-    # 0.0015205, 0.0022536, 0.0076893, 0.029551, 0.041096, 0.020139, 0.073347, 
-    # 0.084144, 0.019658, 0.0038294, -0.0013076, 0.0035463, 0.016561, 0.056019, 
-    # 0.1064, 0.060615, 0.004251, 0.0020135, -0.0069985, 0.016159, 0.04647, 
-    # 0.061755, 0.022986])
-
     return(relevant_freqs, relevant_intensity, relevant_yerrs, covered_trans)
 
 
 # Simulate molecular spectral emission lines for a set of observational parameters
 def predict_intensities(source_size, Ncol, Tex, dV, mol_cat):
     obs_params = ObsParams("test", source_size=source_size)
-    # TODO: try high step-count run for vlsr=[0.0] vs. vlsr=[4.1]
     sim = MolSim("mol sim", mol_cat, obs_params, [0.0], [Ncol], [dV], [Tex], ll=[18000], ul=[27000], gauss=False)
     freq_sim = sim.freq_sim
     int_sim = sim.int_sim
@@ -173,7 +144,7 @@ def make_model(freqs, intensities, source_size, datagrid_freq, datagrid_vel, vls
 
     # Apply the beam dilution correction to the model
     model = apply_beam(datagrid_freq, (J_T - J_Tbg) * (1 - np.exp(-model)), source_size, 70)
-
+    
     return model
 
 
@@ -209,7 +180,7 @@ def is_within_bounds(theta):
     return (
         30. < source_size < 90. and
         10**10. < Ncol < 10**14. and
-        3.2 < vlsr < 5. and
+        3. < vlsr < 5. and
         0.2 < dV < 1.5 and
         7. < Tex < 17.
     )
@@ -267,7 +238,7 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     mol_cat = MolCat(mol_name, catfile)
     obs_params = ObsParams("init", dish_size=70)
     
-    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[4.1], C=[3.4e14], dV=[0.89], T=[10.0], ll=[18000], ul=[27000], gauss=False)
+    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[4.1], C=[3.4e12], dV=[0.89], T=[10.0], ll=[18000], ul=[27000], gauss=False)
     freq_sim = np.array(sim.freq_sim)
     int_sim = np.array(sim.int_sim)
     
@@ -292,9 +263,9 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
 
 
 # Conduct Markov Chain Monte Carlo (MCMC) inference using emcee's ensemble sampler
-def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_path, restart=True, template_run=False):
+def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_path, restart=True, template_run=False, parallelize=True):
     print(f"{CYAN}Fitting column densities for {mol_name}. Restart = {restart}.{RESET}")
-    ndim, nwalkers = 5, 10
+    ndim, nwalkers = 5, 128
     if not os.path.exists(datafile):
         raise FileNotFoundError(f"{RED}The data file {datafile} could not be found.{RESET}")
     datagrid = np.load(datafile, allow_pickle=True)
@@ -305,105 +276,99 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
         # Hardcoded values specific for template species like HC5N (Source size, Ncol, Tex, vlsr, dV)
         initial = np.array([48, 3.4e12, 10.0, 4.1, 0.7575])
         prior_means = initial
-        # TODO: try a more relaxed variance for column densityf
-        prior_stds = np.array([6.5, 0.34e11, 0.8, 0.06, 0.22])
-        print(f"{CYAN}Using hardcoded priors and initial positions for a template run of {mol_name}.{RESET}")
+        prior_stds = np.array([6.5, 0.34e12, 0.8, 0.06, 0.22])
+        print(f"{GRAY}Using hardcoded priors and initial positions for a template run of {mol_name}.{RESET}")
     else:
         # Load priors from previous chain data
         if not os.path.exists(prior_path):
             raise FileNotFoundError(f"\033[31mThe prior path {prior_path} could not be found.\033[0m")
-        print(f"{CYAN}Loading previous chain data from: {prior_path}{RESET}")
+        print(f"{GRAY}Loading previous chain data from: {prior_path}{RESET}")
         psamples = np.load(prior_path).T
-        print(f"{CYAN}Dimensions of samples loaded from chain: {psamples.shape}{RESET}")
+        print(f"{GRAY}Dimensions of samples loaded from chain: {psamples.shape}{RESET}")
         
         prior_means = np.mean(np.percentile(psamples, 50, axis=1), axis=1)
         percentile_16 = np.mean(np.percentile(psamples, 16, axis=1), axis=1)
         percentile_84 = np.mean(np.percentile(psamples, 84, axis=1), axis=1)
         prior_stds = np.abs((percentile_16 + percentile_84 - 2 * prior_means) / 2.)
-        print(f"{CYAN}Loading priors from chain.{RESET}")
+        print(f"{GRAY}Loading priors from chain.{RESET}")
         
         if prior_means.shape == (5,) and prior_stds.shape == (5,) and prior_means.ndim == 1 and prior_stds.ndim == 1:
-            print(f"{CYAN}Priors are correctly shaped as 1-dimensional arrays with 5 elements each.{RESET}")
+            print(f"{GRAY}Priors are correctly shaped as 1-dimensional arrays with 5 elements each.{RESET}")
         else:
             raise ValueError(f"{RED}Error: priors should be 1-dimensional arrays with 5 elements each.{RESET}")
         
         if restart:
-            # TODO: change this to be an arbitrary "tight ball" -- not specific to HC5N
-            initial = np.array([48, 3.4e12, 10.0, 4.1, 0.7575])
-            print(f"{CYAN}Using hardcoded initial positions.{RESET}")
+            initial = np.array([48, 3.4e12, 11.0, 4.1, 0.7575])
+            print(f"{GRAY}Using hardcoded initial positions.{RESET}")
         else:
             chain_data = np.load(os.path.join(fit_folder, mol_name, "chain.npy"))[:,-200:,:].reshape(-1, ndim).T
             initial = np.median(chain_data, axis=1)
-            print(f"{CYAN}Loading initial positions from chain.{RESET}")
+            print(f"{GRAY}Loading initial positions from chain.{RESET}")
     
     # Initialize walkers with a small perturbation relative to the prior standard deviations
     perturbation = np.array([1.e-1, 1.e11, 1.e-3, 1.e-3, 1.e-3])
     pos = [initial + perturbation * np.random.randn(ndim) for _ in range(nwalkers)]
     print()
     
-   # Set up the sampler with a multiprocessing pool
-    with Pool() as pool:
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(datagrid, mol_cat, prior_stds, prior_means), pool=pool)
-
-        # Perform affine invariant MCMC sampling with Gelman-Rubin convergence
+    # Perform affine invariant MCMC sampling with Gelman-rubin convergence
+    if parallelize:
+        with Pool() as pool:
+            # Initialize the sampler with parallelization
+            sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(datagrid, mol_cat, prior_stds, prior_means), pool=pool)
+            
+            for _ in tqdm(range(nruns), desc=f"MCMC Sampling for {mol_name}", colour='white'):
+                sampler.run_mcmc(pos, 1)
+                file_name = os.path.join(fit_folder, mol_name, "chain.npy")
+                np.save(file_name, sampler.chain)
+                pos = sampler.chain[:, -1, :]
+        return
+    else:
+        # Initialize the sampler without parallelization
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(datagrid, mol_cat, prior_stds, prior_means))
+        
         for _ in tqdm(range(nruns), desc=f"MCMC Sampling for {mol_name}", colour='white'):
             sampler.run_mcmc(pos, 1)
             file_name = os.path.join(fit_folder, mol_name, "chain.npy")
             np.save(file_name, sampler.chain)
             pos = sampler.chain[:, -1, :]
 
-    return
-    
-    # For debugging w/o multithreading, fixes order of print statements
-    # sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(datagrid, mol_cat, prior_stds, prior_means))
-
-    # # Perform affine invariant MCMC sampling with Gelman-Rubin convergence
-    # for _ in tqdm(range(nruns), desc=f"MCMC Sampling for {mol_name}", colour='white'):
-    #     sampler.run_mcmc(pos, 1)
-    #     file_name = os.path.join(fit_folder, mol_name, "chain.npy")
-    #     np.save(file_name, sampler.chain)
-    #     pos = sampler.chain[:, -1, :]
-
-# Reproduce Liton plots
-# Large time run
-# Check data for vlsr
-# Increase exploration for HC5N, which will be a template species
-# drop the 4th line
-# overlay fits of Loomis and CASSIS
 
 if __name__ == "__main__":
     BASE_DIR = os.getcwd()
 
-    input_dict = {
+    config = {
             'mol_name': 'hc5n_hfs',
             'fit_folder': os.path.join(BASE_DIR, 'DSN_fit_results'),
-            'cat_folder': os.path.join(BASE_DIR, 'GOTHAM_catalogs'),
-            # 'data_path': os.path.join(BASE_DIR, 'DSN_data', 'C2_hc5n_hfs_chunks.npy'),
+            'cat_folder': os.path.join(BASE_DIR, 'CDMS_catalog'),
             'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc5n_corrected.npy'),
             'block_interlopers': True,
-            'nruns': 10000,
+            'nruns': 2000,
             'restart': True,
             'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain.npy'),
-            'template_run': True
+            'template_run': True,
+            'parallelize': True,
+            
+            # 'data_path': os.path.join(BASE_DIR, 'DSN_data', 'C2_hc5n_hfs_chunks.npy'),
         }
     
     datafile, catalogue = init_setup(
-            fit_folder=input_dict['fit_folder'],
-            cat_folder=input_dict['cat_folder'],
-            data_path=input_dict['data_path'],
-            mol_name=input_dict['mol_name'],
-            block_interlopers=input_dict['block_interlopers']
+            fit_folder=config['fit_folder'],
+            cat_folder=config['cat_folder'],
+            data_path=config['data_path'],
+            mol_name=config['mol_name'],
+            block_interlopers=config['block_interlopers']
         )
 
     fit_multi_gaussian(
             datafile=datafile,
-            fit_folder=input_dict['fit_folder'],
+            fit_folder=config['fit_folder'],
             catalogue=catalogue,
-            nruns=input_dict['nruns'],
-            mol_name=input_dict['mol_name'],
-            prior_path=input_dict['prior_path'],
-            restart=input_dict['restart'],
-            template_run=input_dict['template_run']
+            nruns=config['nruns'],
+            mol_name=config['mol_name'],
+            prior_path=config['prior_path'],
+            restart=config['restart'],
+            template_run=config['template_run'],
+            parallelize=config['parallelize']
         )
 
     param_labels = [
@@ -415,7 +380,7 @@ if __name__ == "__main__":
         ]
 
     # Verify that chain file path matches where data was saved
-    CHAIN_PATH = os.path.join(input_dict['fit_folder'], input_dict['mol_name'], "chain.npy")
+    CHAIN_PATH = os.path.join(config['fit_folder'], config['mol_name'], "chain.npy")
     if os.path.exists(CHAIN_PATH):
         plot_results(CHAIN_PATH, param_labels)
     else:

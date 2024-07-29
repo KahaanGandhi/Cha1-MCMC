@@ -5,12 +5,12 @@
 # Extends prior scripts for spectral simulation and MCMC inference.
 # ----------------------------------------------------------------------------------
 
-import numpy as np
-from numpy import exp as exp
-from tabulate import tabulate
-import time as tm
 import corner
+import numpy as np
+import time as tm
 import matplotlib.pyplot as plt
+from tabulate import tabulate
+from numpy import exp as exp
 from constants import *
 
 # Generate corner (scatterplot matrices) and trace (time-series) plots
@@ -69,7 +69,7 @@ def plot_results(chain_path, param_labels):
         title = custom_title_formatter(i)
         axes[i, i].set_title(f"{param_labels_latex[i]}: {title}", fontsize=12)
     
-    fig.savefig(f"{chain_path[:-4]}_corner.png")
+    fig.savefig(f"{chain_path[:-4]}_corner.png", dpi=600)
 
     # Generate trace plots
     n_params = len(param_labels)  # Number of parameters to plot
