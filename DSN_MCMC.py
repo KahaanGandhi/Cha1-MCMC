@@ -337,47 +337,46 @@ if __name__ == "__main__":
     BASE_DIR = os.getcwd()
 
     config = {
-            'mol_name': 'hc5n_hfs',
-            'fit_folder': os.path.join(BASE_DIR, 'DSN_fit_results'),
-            'cat_folder': os.path.join(BASE_DIR, 'CDMS_catalog'),
-            'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc5n_corrected.npy'),
-            'block_interlopers': True,
-            'nruns': 2000,
-            'restart': True,
-            'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain.npy'),
-            'template_run': True,
-            'parallelize': True,
-            
-            # 'data_path': os.path.join(BASE_DIR, 'DSN_data', 'C2_hc5n_hfs_chunks.npy'),
-        }
+        'mol_name': 'hc5n_hfs',
+        'fit_folder': os.path.join(BASE_DIR, 'DSN_fit_results'),
+        'cat_folder': os.path.join(BASE_DIR, 'CDMS_catalog'),
+        'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc5n_corrected.npy'),
+        'block_interlopers': True,
+        'nruns': 5000,
+        'restart': True,
+        'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain.npy'),
+        'template_run': True,
+        'parallelize': True,    
+        # 'data_path': os.path.join(BASE_DIR, 'DSN_data', 'C2_hc5n_hfs_chunks.npy'),
+    }
     
     datafile, catalogue = init_setup(
-            fit_folder=config['fit_folder'],
-            cat_folder=config['cat_folder'],
-            data_path=config['data_path'],
-            mol_name=config['mol_name'],
-            block_interlopers=config['block_interlopers']
-        )
+        fit_folder=config['fit_folder'],
+        cat_folder=config['cat_folder'],
+        data_path=config['data_path'],
+        mol_name=config['mol_name'],
+        block_interlopers=config['block_interlopers']
+    )
 
     fit_multi_gaussian(
-            datafile=datafile,
-            fit_folder=config['fit_folder'],
-            catalogue=catalogue,
-            nruns=config['nruns'],
-            mol_name=config['mol_name'],
-            prior_path=config['prior_path'],
-            restart=config['restart'],
-            template_run=config['template_run'],
-            parallelize=config['parallelize']
-        )
+        datafile=datafile,
+        fit_folder=config['fit_folder'],
+        catalogue=catalogue,
+        nruns=config['nruns'],
+        mol_name=config['mol_name'],
+        prior_path=config['prior_path'],
+        restart=config['restart'],
+        template_run=config['template_run'],
+        parallelize=config['parallelize']
+    )
 
     param_labels = [
-            'Source Size [″]', 
-            'Nᴄᴏʟ [cm⁻²]',
-            'Tᴇx [K]',
-            'ᴠʟsʀ [km s⁻¹]',
-            'dV [km s⁻¹]'
-        ]
+        'Source Size [″]', 
+        'Nᴄᴏʟ [cm⁻²]',
+        'Tᴇx [K]',
+        'ᴠʟsʀ [km s⁻¹]',
+        'dV [km s⁻¹]'
+    ]
 
     # Verify that chain file path matches where data was saved
     CHAIN_PATH = os.path.join(config['fit_folder'], config['mol_name'], "chain.npy")
