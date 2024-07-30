@@ -102,11 +102,11 @@ observing_mode      = "PSw/DBSw"  # Alternatively observing_mode = "FSw",
 
 comp_1              = Component(
 # Needed for LTE and RADEX:
-nmol 		        = {'min':1.0e10, 'max':1.0e14, 'nstep':1, 'log_mode':False},
-temp 		        = {'min':3.0,    'max':15.0,   'nstep':1, 'log_mode':False},
-fwhm 		        = {'min':0.2,    'max':1.5,    'nstep':1, 'log_mode':False},
-size 		        = {'min':10,     'max':90,     'nstep':1, 'log_mode':False},
-vlsr 		        = {'min':3.0,    'max':5.0,    'nstep':1, 'log_mode':False},
+nmol 	            = {'min':1.0e10, 'max':1.0e14, 'nstep':1, 'log_mode':False},
+temp 	            = {'min':3.0,    'max':15.0,   'nstep':1, 'log_mode':False},
+fwhm 	            = {'min':0.2,    'max':1.5,    'nstep':1, 'log_mode':False},
+size 	            = {'min':10,     'max':90,     'nstep':1, 'log_mode':False},
+vlsr 	            = {'min':3.0,    'max':5.0,    'nstep':1, 'log_mode':False},
 iso                 = {'min':1.0,    'max':1.0,    'nstep':1, 'log_mode':False},
 interacting         = True,
 reducePhysicalParam = {"nmol": rpp, "temp": rpp, "fwhm": rpp, "size": rpp, "vlsr": rpp, "iso": rpp},
