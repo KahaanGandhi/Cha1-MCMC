@@ -29,11 +29,11 @@ Range.unit          = "GHz"  # Available units: GHz, km/s, MHz, cm-1, micrometer
 # r3                  = Range(23.961512293599, 23.966304401425)
 # r4                  = Range(26.623869424849, 26.629180423656)
 
-# For Cha-C2:
-r1                  = Range(18.636742833902, 18.640466636072)
-r2                  = Range(21.299119339272, 21.303392554877)
-r3                  = Range(23.961502431189, 23.966294537261)
-r4                  = Range(26.623881378297, 26.629192374511)
+# For Cha-C2 (frequencies hardcoded for July 30th version of data):
+r1                  = Range(18.636748308614, 18.640471784918)
+r2                  = Range(21.299134617819, 21.303376939183)
+r3                  = Range(23.961488862777, 23.966311069794)
+r4                  = Range(26.623887660063, 26.629198191843)
 
 # Define the step size for MCMC walkers; tune to maintain acceptance rate within [0.2, 0.5]
 rpp                 = 20
@@ -51,7 +51,7 @@ cassisScriptsPath   = Software.getCassisPath()+"/delivery/script/examples/"
 myDirInput          = cassisDataPath
 myDirOutput         = cassisDataPath
 # inputFile           = myDirInput+"CHA-MMS1_HC5N.lis"
-inputFile           = myDirInput+"cha-c2-hc5n_corrected.lis"
+inputFile           = myDirInput+"cha-c2-hc5n-july30.lis"
 outputFile          = myDirOutput+myName+".dat"
 
 #======================================================================================#
@@ -103,7 +103,7 @@ observing_mode      = "PSw/DBSw"  # Alternatively observing_mode = "FSw",
 comp_1              = Component(
 # Needed for LTE and RADEX:
 nmol 		        = {'min':1.0e10, 'max':1.0e14, 'nstep':1, 'log_mode':False},
-temp 		        = {'min':5.0,    'max':15.0,   'nstep':1, 'log_mode':False},
+temp 		        = {'min':3.0,    'max':15.0,   'nstep':1, 'log_mode':False},
 fwhm 		        = {'min':0.2,    'max':1.5,    'nstep':1, 'log_mode':False},
 size 		        = {'min':10,     'max':90,     'nstep':1, 'log_mode':False},
 vlsr 		        = {'min':3.0,    'max':5.0,    'nstep':1, 'log_mode':False},
@@ -124,12 +124,12 @@ geometry            = "sphere"  # Alternatively, geometry = "slab"
 params_1            = {"nmol": 3.4e12, 
                        "fwhm": 1.0, 
                        "vlsr": 4.1, 
-                       "temp": 11.0, 
+                       "temp": 7.0, 
                        "size": 50
 }
 
 # Set the walker and burning values
-drawNumber          = 50000   # The higher this value (the longer the execution time), the wider the area visited in the space of the χ2. 
+drawNumber          = 20000   # The higher this value (the longer the execution time), the wider the area visited in the space of the χ2. 
 cutOff              = 1
 ratioAtCutOff       = 1  # Value must be <=1
 
@@ -176,4 +176,4 @@ myPythonScript      = cassisScriptsPath+"Plots_MCMC.py"
 fracOfRejWalkers    = "0.2"
 trianglePlot        = [myPython+" "+myPythonScript+" "+myDirOutput+" "+myName+" "+fracOfRejWalkers]
 subprocess.Popen(trianglePlot, shell=True)
-# ==============================================================================
+#===============================================================================#
