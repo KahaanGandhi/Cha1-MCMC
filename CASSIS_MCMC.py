@@ -101,7 +101,7 @@ observing_mode      = "PSw/DBSw"  # Alternatively observing_mode = "FSw",
 #======================================================================================#
 
 comp_1              = Component(
-# Needed for LTE and RADEX:
+# Needed for both LTE and RADEX:
 nmol 	            = {'min':1.0e10, 'max':1.0e14, 'nstep':1, 'log_mode':False},
 temp 	            = {'min':3.0,    'max':15.0,   'nstep':1, 'log_mode':False},
 fwhm 	            = {'min':0.2,    'max':1.5,    'nstep':1, 'log_mode':False},

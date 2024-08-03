@@ -15,11 +15,20 @@ from tqdm import tqdm
 from classes import *
 from constants import *
 
-# TODO: try simulating best fit parameters w/ LTE CASSIS to overlay
-# TODO: get successful CASSIS run w/ sufficinetly large runtime
+# Get HC5N and HC7N with Loomis - simulate spectra?
+# Reproduce Liton CASSIS
+# Interim report + abstract
+
+# TODO: get successful CASSIS run w/ sufficiently large runtime - burn in?
 # TODO: get successful LOOMIS runs with and without 4th line
+
+# TODO: try simulating best fit parameters w/ LTE CASSIS to overlay
 # TODO: investigate hardcoded frequency correction
-# TODO: submit SURF@JPL abstract to JPL URS
+
+# THIS WEEK:
+# Rerun HC5N and HC7N with newly corrected data
+# Put together slides for TMRW -- focus on problems
+# properly bracket Tex for CASSIS
 
 # Calculates local RMS noise in a given spectrum by iteratively masking outliers. 3.5σ default, 6σ for weaker species. 
 def calc_noise_std(intensity, threshold=3.5):
@@ -40,9 +49,9 @@ def calc_noise_std(intensity, threshold=3.5):
 
     return noise_mean, noise_std
 
-
+# TDOO: find set of parameters / priors / shifts that creates the same problem as CASSIS
 # Reads in the data, returns the data which has coverage of a given species (from simulated intensities)
-def read_file(filename, restfreqs, int_sim, shift=4.1, GHz=False, plot=False, block_interlopers=True):
+def read_file(filename, restfreqs, int_sim, shift=0.00, GHz=False, plot=False, block_interlopers=True):
     data = np.load(filename, allow_pickle=True)
 
     # Unpack data arrays
@@ -58,10 +67,10 @@ def read_file(filename, restfreqs, int_sim, shift=4.1, GHz=False, plot=False, bl
 
     # Iterate through rest frequencies to identify their corresponding spectral lines
     for i, rf in enumerate(restfreqs):
-        thresh = 0.05                                                    # Set a threshold as 5% of the peak intensity...
-        if int_sim[i] > thresh * np.max(int_sim):                        # find significant simulated intensities...
-            vel = (rf - freqs) / rf * ckm + shift                        # calculate velocity shift for each frequency...
-            locs = np.where((vel < (1.2 + 4.1)) & (vel > (-1.2 + 4.1)))  # and filter for a velocity range
+        thresh = 0.05                                                      # Set a threshold as 5% of the peak intensity...
+        if int_sim[i] > thresh * np.max(int_sim):                          # find significant simulated intensities...
+            vel = (rf - freqs) / rf * ckm + shift                          # calculate velocity shift for each frequency...
+            locs = np.where((vel < (1.2 + 4.33)) & (vel > (-1.2 + 4.33)))  # and filter for a velocity range
 
             if locs[0].size != 0:
                 noise_mean, noise_std = calc_noise_std(intensity[locs])
@@ -82,23 +91,23 @@ def read_file(filename, restfreqs, int_sim, shift=4.1, GHz=False, plot=False, bl
                     plt.show()
             else:
                 print(f"{GRAY}{rf:10.4f} MHz  |  No data.{RESET}")
-                
+
     # Filter out zero entries to return a sparse, small spectrum
     mask = relevant_freqs > 0
     relevant_freqs = relevant_freqs[mask]
     relevant_intensity = relevant_intensity[mask]
     relevant_yerrs = relevant_yerrs[mask]
-    
-    # A hardcoded shift correction...
-    relevant_freqs -= 0.367
-    
+
+    # A hardcoded shift correction for inproperly corrected DSN data...
+    # relevant_freqs -= 0.367
+
     return(relevant_freqs, relevant_intensity, relevant_yerrs, covered_trans)
 
 
 # Simulate molecular spectral emission lines for a set of observational parameters
 def predict_intensities(source_size, Ncol, Tex, dV, mol_cat):
     obs_params = ObsParams("test", source_size=source_size)
-    sim = MolSim("mol sim", mol_cat, obs_params, [0.0], [Ncol], [dV], [Tex], ll=[18000], ul=[27000], gauss=False)
+    sim = MolSim("mol sim", mol_cat, obs_params, [0.00], [Ncol], [dV], [Tex], ll=[18000], ul=[27000], gauss=False)
     freq_sim = sim.freq_sim
     int_sim = sim.int_sim
     tau_sim = sim.tau_sim
@@ -133,7 +142,7 @@ def make_model(freqs, intensities, source_size, datagrid_freq, datagrid_vel, vls
     # Compute Gaussian profiles for each line and sum them
     for i in range(num_lines):
         velocity_grid = (freqs[i] - datagrid_freq) / freqs[i] * ckm  # Convert frequency shifts to velocity space
-        mask = np.abs(velocity_grid - 4.1) < dV * 10
+        mask = np.abs(velocity_grid - 4.33) < dV * 10
         
         # Gaussian profile for the intensity at each frequency point
         model[mask] += intensities[i] * np.exp(-0.5 * ((velocity_grid[mask] - vlsr) / (dV / 2.355))**2.)
@@ -180,9 +189,9 @@ def is_within_bounds(theta):
     return (
         30. < source_size < 90. and
         10**10. < Ncol < 10**14. and
-        3. < vlsr < 5. and
+        3. < vlsr < 5.5 and
         0.2 < dV < 1.5 and
-        7. < Tex < 17.
+        3.3 < Tex < 12.
     )
 
 
@@ -237,8 +246,7 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     # Initialize molecular simulation components
     mol_cat = MolCat(mol_name, catfile)
     obs_params = ObsParams("init", dish_size=70)
-    
-    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[4.1], C=[3.4e12], dV=[0.89], T=[10.0], ll=[18000], ul=[27000], gauss=False)
+    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[0.00], C=[3.4e12], dV=[0.89], T=[7.0], ll=[18000], ul=[27000], gauss=False)
     freq_sim = np.array(sim.freq_sim)
     int_sim = np.array(sim.int_sim)
     
@@ -274,9 +282,9 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
     # Choose initial parameters and perturbations based on the run type
     if template_run:
         # Hardcoded values specific for template species like HC5N (Source size, Ncol, Tex, vlsr, dV)
-        initial = np.array([48, 3.4e12, 10.0, 4.1, 0.7575])
+        initial = np.array([48, 3.4e12, 8.0, 4.3, 0.7575])
         prior_means = initial
-        prior_stds = np.array([6.5, 0.34e12, 0.8, 0.06, 0.22])
+        prior_stds = np.array([6.5, 0.34e12, 3.0, 0.06, 0.22])
         print(f"{GRAY}Using hardcoded priors and initial positions for a template run of {mol_name}.{RESET}")
     else:
         # Load priors from previous chain data
@@ -298,7 +306,7 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
             raise ValueError(f"{RED}Error: priors should be 1-dimensional arrays with 5 elements each.{RESET}")
         
         if restart:
-            initial = np.array([48, 3.4e12, 11.0, 4.1, 0.7575])
+            initial = np.array([48, 3.4e12, 11.0, 4.3, 0.7575])
             print(f"{GRAY}Using hardcoded initial positions.{RESET}")
         else:
             chain_data = np.load(os.path.join(fit_folder, mol_name, "chain.npy"))[:,-200:,:].reshape(-1, ndim).T
@@ -340,16 +348,16 @@ if __name__ == "__main__":
         'mol_name': 'hc5n_hfs',
         'fit_folder': os.path.join(BASE_DIR, 'DSN_fit_results'),
         'cat_folder': os.path.join(BASE_DIR, 'CDMS_catalog'),
-        'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc5n_corrected.npy'),
+        'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc5n_july31.npy'),
+        # 'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc7n.npy'),
         'block_interlopers': True,
-        'nruns': 5000,
+        'nruns': 10000,
         'restart': True,
         'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain.npy'),
         'template_run': True,
-        'parallelize': True,    
-        # 'data_path': os.path.join(BASE_DIR, 'DSN_data', 'C2_hc5n_hfs_chunks.npy'),
+        'parallelize': True,
     }
-    
+
     datafile, catalogue = init_setup(
         fit_folder=config['fit_folder'],
         cat_folder=config['cat_folder'],
