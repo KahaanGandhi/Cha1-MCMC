@@ -1,5 +1,5 @@
 #============================================================================================#
-# This script performs χ2 computations using the MCMC algorithm for HC5N in the LTE model.   #
+# This script performs χ2 computations using the MCMC algorithm for HC7N in the LTE model.   #
 # Adapted from CASSIS documentation, it is designed for execution in CASSIS Jython.          #
 # For more details, visit: http://cassis.irap.omp.eu/docs/script/README.html                 #
 # Note: Execution may take some time.                                                        #

@@ -18,8 +18,16 @@ from constants import *
 # Get HC5N and HC7N with Loomis - simulate spectra?
 # Reproduce Liton CASSIS
 
+# FIRST: FIT HC7N AND DERIVE ABUNDANCES -- expect order of magnitude lower than HC5N
+# TRY TO INCREASE COLUMN DENSITY OF HC5N
+# MAKE PLOT TO SHOW MODEL FITTING DATA -- good to troubleshoot
+# send CASSIS to darek
+
+# Loomis is too low, try a grid search
+# vlsr and column density should be changed
+
 # TODO: try to constrain Loomis runs w/o hardcoding for HC5N and HC7N
-# TODO: figure out how to simulate spectra for Loomis
+# TODO: simulate spectra for Loomis for overlay
 # TODO: simulate Loomis without 4th line once constrained
 
 # THIS WEEK:
@@ -347,7 +355,7 @@ if __name__ == "__main__":
         # 'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc5n_july31.npy'),
         'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc7n.npy'),
         'block_interlopers': True,
-        'nruns': 10000,
+        'nruns': 4000,
         'restart': False,
         'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain.npy'),
         'template_run': False,
