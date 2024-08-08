@@ -55,7 +55,7 @@ def calc_noise_std(intensity, threshold=3.5):
 
 # TDOO: find set of parameters / priors / shifts that creates the same problem as CASSIS
 # Reads in the data, returns the data which has coverage of a given species (from simulated intensities)
-def read_file(filename, restfreqs, int_sim, shift=0.00, GHz=False, plot=False, block_interlopers=True):
+def read_file(filename, restfreqs, int_sim, shift=4.33, GHz=False, plot=False, block_interlopers=True):
     data = np.load(filename, allow_pickle=True)
 
     # Unpack data arrays
@@ -74,7 +74,7 @@ def read_file(filename, restfreqs, int_sim, shift=0.00, GHz=False, plot=False, b
         thresh = 0.05                                                      # Set a threshold as 5% of the peak intensity...
         if int_sim[i] > thresh * np.max(int_sim):                          # find significant simulated intensities...
             vel = (rf - freqs) / rf * ckm + shift                          # calculate velocity shift for each frequency...
-            locs = np.where((vel < (1.2 + 4.33)) & (vel > (-1.2 + 4.33)))  # and filter for a velocity range
+            locs = np.where((vel < (4.33 + 1.5)) & (vel > (4.33 - 1.5)))  # and filter for a velocity range
 
             if locs[0].size != 0:
                 noise_mean, noise_std = calc_noise_std(intensity[locs])
@@ -111,7 +111,7 @@ def read_file(filename, restfreqs, int_sim, shift=0.00, GHz=False, plot=False, b
 # Simulate molecular spectral emission lines for a set of observational parameters
 def predict_intensities(source_size, Ncol, Tex, dV, mol_cat):
     obs_params = ObsParams("test", source_size=source_size)
-    sim = MolSim("mol sim", mol_cat, obs_params, [0.00], [Ncol], [dV], [Tex], ll=[18000], ul=[27000], gauss=False)
+    sim = MolSim("mol sim", mol_cat, obs_params, [4.33], [Ncol], [dV], [Tex], ll=[18000], ul=[27000], gauss=False)
     freq_sim = sim.freq_sim
     int_sim = sim.int_sim
     tau_sim = sim.tau_sim
@@ -139,13 +139,13 @@ def apply_beam(frequency, intensity, source_size, dish_size):
 
 # Construct a model of molecular line emissions (can sum over multiple sources to create composite model)
 @njit(fastmath=True)
-def make_model(freqs, intensities, source_size, datagrid_freq, datagrid_vel, vlsr, dV, Tex):
-    model = np.zeros(datagrid_vel.shape)
+def make_model(freqs, intensities, source_size, datagrid_freq, datagrid_ints, vlsr, dV, Tex):    
+    model = np.zeros(datagrid_ints.shape)
     num_lines = freqs.shape[0]
 
     # Compute Gaussian profiles for each line and sum them
     for i in range(num_lines):
-        velocity_grid = (freqs[i] - datagrid_freq) / freqs[i] * ckm  # Convert frequency shifts to velocity space
+        velocity_grid = (freqs[i] - datagrid_freq) / freqs[i] * ckm  + 4.33  # Convert frequency shifts to velocity space
         mask = np.abs(velocity_grid - 4.33) < dV * 10
         
         # Gaussian profile for the intensity at each frequency point
@@ -157,7 +157,7 @@ def make_model(freqs, intensities, source_size, datagrid_freq, datagrid_vel, vls
 
     # Apply the beam dilution correction to the model
     model = apply_beam(datagrid_freq, (J_T - J_Tbg) * (1 - np.exp(-model)), source_size, 70)
-    
+
     return model
 
 
@@ -186,15 +186,15 @@ def lnlike(theta, datagrid, mol_cat):
     return -0.5 * tot_lnlike
 
 
-# Apply physical priors (e.g. positivity constraints) and limits. For TMC-1, impose sequential order on velocities
+# Apply physical priors (e.g. positivity constraints) and limits. For multiple sources, impose sequential order on velocities
 def is_within_bounds(theta):
     source_size, Ncol, Tex, vlsr, dV = theta
     
     return (
         30. < source_size < 90. and
-        10**9. < Ncol < 10**14. and
+        10**8. < Ncol < 10**14. and
         3. < vlsr < 5.5 and
-        0.2 < dV < 1.5 and
+        0.35 < dV < 1.5 and
         3.4 < Tex < 12.
     )
 
@@ -250,7 +250,7 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     # Initialize molecular simulation components
     mol_cat = MolCat(mol_name, catfile)
     obs_params = ObsParams("init", dish_size=70)
-    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[0.00], C=[3.4e12], dV=[0.89], T=[7.0], ll=[18000], ul=[27000], gauss=False)
+    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[4.33], C=[3.4e12], dV=[0.89], T=[7.0], ll=[18000], ul=[27000], gauss=False)
     freq_sim = np.array(sim.freq_sim)
     int_sim = np.array(sim.int_sim)
     
@@ -269,8 +269,9 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
         element_type = type(element).__name__
         element_shape = element.shape if isinstance(element, np.ndarray) else 'N/A'
         print(f"{GRAY}Reduced Spectrum Datagrid | Index: {i} | Type: {element_type} | Shape: {element_shape}{RESET}")
+        print(list(datagrid[i]))
     np.save(datafile_path, datagrid, allow_pickle=True)
-
+    
     return datafile_path, catfile
 
 
@@ -310,10 +311,10 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
             raise ValueError(f"{RED}Error: priors should be 1-dimensional arrays with 5 elements each.{RESET}")
         
         if restart:
-            initial = np.array([48, 3.4e12, 11.0, 4.3, 0.7575])
+            initial = np.array([48, 3.4e11, 11.0, 4.3, 0.7575])
             print(f"{GRAY}Using hardcoded initial positions.{RESET}")
         else:
-            chain_data = np.load(os.path.join(fit_folder, mol_name, "chain.npy"))[:,-200:,:].reshape(-1, ndim).T
+            chain_data = np.load(os.path.join(fit_folder, "hc5n_hfs", "chain_template.npy"))[:,-200:,:].reshape(-1, ndim).T
             initial = np.median(chain_data, axis=1)
             print(f"{GRAY}Loading initial positions from chain.{RESET}")
     
@@ -349,15 +350,15 @@ if __name__ == "__main__":
     BASE_DIR = os.getcwd()
 
     config = {
-        'mol_name': 'hc7n_hfs',
+        'mol_name': 'hc5n_hfs',
         'fit_folder': os.path.join(BASE_DIR, 'DSN_fit_results'),
         'cat_folder': os.path.join(BASE_DIR, 'CDMS_catalog'),
-        # 'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc5n_july31.npy'),
-        'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc7n.npy'),
+        'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc5n_july31.npy'),
+        # 'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc7n.npy'),
         'block_interlopers': True,
-        'nruns': 4000,
+        'nruns': 10000,
         'restart': False,
-        'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain.npy'),
+        'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain_template.npy'),
         'template_run': False,
         'parallelize': True,
     }
