@@ -35,7 +35,6 @@ def calc_noise_std(intensity, threshold=3.5):
 
     return noise_mean, noise_std
 
-# TDOO: find set of parameters / priors / shifts that creates the same problem as CASSIS
 # Reads in the data, returns the data which has coverage of a given species (from simulated intensities)
 def read_file(filename, restfreqs, int_sim, shift=4.33, GHz=False, plot=False, block_interlopers=True):
     data = np.load(filename, allow_pickle=True)
@@ -53,9 +52,9 @@ def read_file(filename, restfreqs, int_sim, shift=4.33, GHz=False, plot=False, b
 
     # Iterate through rest frequencies to identify their corresponding spectral lines
     for i, rf in enumerate(restfreqs):
-        thresh = 0.05                                                      # Set a threshold as 5% of the peak intensity...
-        if int_sim[i] > thresh * np.max(int_sim):                          # find significant simulated intensities...
-            vel = (rf - freqs) / rf * ckm + shift                          # calculate velocity shift for each frequency...
+        thresh = 0.05                                                     # Set a threshold as 5% of the peak intensity...
+        if int_sim[i] > thresh * np.max(int_sim):                         # find significant simulated intensities...
+            vel = (rf - freqs) / rf * ckm + shift                         # calculate velocity shift for each frequency...
             locs = np.where((vel < (4.33 + 1.5)) & (vel > (4.33 - 1.5)))  # and filter for a velocity range
 
             if locs[0].size != 0:
@@ -125,7 +124,7 @@ def make_model(freqs, intensities, source_size, datagrid_freq, datagrid_ints, vl
     model = np.zeros(datagrid_ints.shape)
     num_lines = freqs.shape[0]
 
-    # Compute Gaussian profiles for each line and sum them
+    # Compute Gaussian profiles for each line and sum them (can use vlsr in place of fixed value)
     for i in range(num_lines):
         velocity_grid = (freqs[i] - datagrid_freq) / freqs[i] * ckm  + 4.33  # Convert frequency shifts to velocity space
         mask = np.abs(velocity_grid - 4.33) < dV * 10
@@ -174,7 +173,7 @@ def is_within_bounds(theta):
     
     return (
         30. < source_size < 90. and
-        10**8. < Ncol < 10**14. and  # HC7N -- 10E9 10E12
+        10**8. < Ncol < 10**14. and
         3. < vlsr < 5.5 and
         0.35 < dV < 1.5 and
         3.4 < Tex < 12.
@@ -251,7 +250,6 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
         element_type = type(element).__name__
         element_shape = element.shape if isinstance(element, np.ndarray) else 'N/A'
         print(f"{GRAY}Reduced Spectrum Datagrid | Index: {i} | Type: {element_type} | Shape: {element_shape}{RESET}")
-        print(list(datagrid[i]))
     np.save(datafile_path, datagrid, allow_pickle=True)
     
     return datafile_path, catfile
@@ -305,6 +303,14 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
     pos = [initial + perturbation * np.random.randn(ndim) for _ in range(nwalkers)]
     print()
     
+    if template_run and mol_name == "hc5n_hfs" and nruns == 10000:
+        file_name = os.path.join(fit_folder, mol_name, "chain_template.npy")
+    elif template_run:
+        print(f"{RED}Template run selected with incorrect template species or step count. Proceeding with non-template run.{RESET}")
+        file_name = os.path.join(fit_folder, mol_name, "chain.npy")
+    else:
+        file_name = os.path.join(fit_folder, mol_name, "chain.npy")
+
     # Perform affine invariant MCMC sampling with Gelman-rubin convergence
     if parallelize:
         with Pool() as pool:
@@ -313,17 +319,15 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
             
             for _ in tqdm(range(nruns), desc=f"MCMC Sampling for {mol_name}", colour='white'):
                 sampler.run_mcmc(pos, 1)
-                file_name = os.path.join(fit_folder, mol_name, "chain.npy")
                 np.save(file_name, sampler.chain)
                 pos = sampler.chain[:, -1, :]
         return
     else:
-        # Initialize the sampler without parallelization
+        # Initialize the sampler without parallelization (ideal for debugging)
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(datagrid, mol_cat, prior_stds, prior_means))
         
         for _ in tqdm(range(nruns), desc=f"MCMC Sampling for {mol_name}", colour='white'):
             sampler.run_mcmc(pos, 1)
-            file_name = os.path.join(fit_folder, mol_name, "chain.npy")
             np.save(file_name, sampler.chain)
             pos = sampler.chain[:, -1, :]
 
@@ -332,16 +336,16 @@ if __name__ == "__main__":
     BASE_DIR = os.getcwd()
 
     config = {
-        'mol_name': 'hc7n_hfs',
+        'mol_name': 'hc5n_hfs',
         'fit_folder': os.path.join(BASE_DIR, 'DSN_fit_results'),
         'cat_folder': os.path.join(BASE_DIR, 'CDMS_catalog'),
-        # 'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc5n_july31.npy'),
-        'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc7n.npy'),
+        'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc5n_example.npy'),
+        # 'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc7n_example.npy'),
         'block_interlopers': True,
-        'nruns': 1000,
-        'restart': False,
+        'nruns': 10000,
+        'restart': True,
         'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain_template.npy'),
-        'template_run': False,
+        'template_run': True,
         'parallelize': True,
     }
 
