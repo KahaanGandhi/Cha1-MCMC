@@ -15,24 +15,6 @@ from tqdm import tqdm
 from classes import *
 from constants import *
 
-# Get HC5N and HC7N with Loomis - simulate spectra?
-# Reproduce Liton CASSIS
-
-# FIRST: FIT HC7N AND DERIVE ABUNDANCES -- expect order of magnitude lower than HC5N
-# TRY TO INCREASE COLUMN DENSITY OF HC5N
-# MAKE PLOT TO SHOW MODEL FITTING DATA -- good to troubleshoot
-# send CASSIS to darek
-
-# Loomis is too low, try a grid search
-# vlsr and column density should be changed
-
-# TODO: try to constrain Loomis runs w/o hardcoding for HC5N and HC7N
-# TODO: simulate spectra for Loomis for overlay
-# TODO: simulate Loomis without 4th line once constrained
-
-# THIS WEEK:
-# Rerun HC5N and HC7N with newly corrected data
-# properly bracket Tex for CASSIS
 
 # Calculates local RMS noise in a given spectrum by iteratively masking outliers. 3.5σ default, 6σ for weaker species. 
 def calc_noise_std(intensity, threshold=3.5):
@@ -192,7 +174,7 @@ def is_within_bounds(theta):
     
     return (
         30. < source_size < 90. and
-        10**8. < Ncol < 10**14. and
+        10**8. < Ncol < 10**14. and  # HC7N -- 10E9 10E12
         3. < vlsr < 5.5 and
         0.35 < dV < 1.5 and
         3.4 < Tex < 12.
@@ -311,7 +293,7 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
             raise ValueError(f"{RED}Error: priors should be 1-dimensional arrays with 5 elements each.{RESET}")
         
         if restart:
-            initial = np.array([48, 3.4e11, 11.0, 4.3, 0.7575])
+            initial = np.array([48, 3.4e12, 11.0, 4.3, 0.7575])
             print(f"{GRAY}Using hardcoded initial positions.{RESET}")
         else:
             chain_data = np.load(os.path.join(fit_folder, "hc5n_hfs", "chain_template.npy"))[:,-200:,:].reshape(-1, ndim).T
@@ -350,13 +332,13 @@ if __name__ == "__main__":
     BASE_DIR = os.getcwd()
 
     config = {
-        'mol_name': 'hc5n_hfs',
+        'mol_name': 'hc7n_hfs',
         'fit_folder': os.path.join(BASE_DIR, 'DSN_fit_results'),
         'cat_folder': os.path.join(BASE_DIR, 'CDMS_catalog'),
-        'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc5n_july31.npy'),
-        # 'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc7n.npy'),
+        # 'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc5n_july31.npy'),
+        'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc7n.npy'),
         'block_interlopers': True,
-        'nruns': 10000,
+        'nruns': 1000,
         'restart': False,
         'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain_template.npy'),
         'template_run': False,
