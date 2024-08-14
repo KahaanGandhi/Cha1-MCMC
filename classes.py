@@ -1,7 +1,7 @@
 # ----------------------------------------------------------------------------------
 # Based on methodologies described in:
 # Loomis, R.A. et al., Nat Astron 5, 188–196 (2021), DOI: 10.1038/s41550-020-01261-4
-# Extends prior scripts for spectral simulation and MCMC inference.
+# This script is functional with no changes from the original Loomis et al. codebase.
 # ----------------------------------------------------------------------------------
 
 import numpy as np

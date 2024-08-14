@@ -14,7 +14,7 @@ from numpy import exp as exp
 from constants import *
 
 # Generate corner (scatterplot matrices) and trace (time-series) plots
-def plot_results(chain_path, param_labels):
+def plot_results(chain_path, param_labels, include_trace=False):
     param_labels_latex = [
         r'Source Size [$^{\prime\prime}$]', 
         r'N$_{\mathrm{col}}$ [cm$^{-2}$]',
@@ -72,16 +72,17 @@ def plot_results(chain_path, param_labels):
     fig.savefig(f"{chain_path[:-4]}_corner.png", dpi=600)
 
     # Generate trace plots
-    n_params = len(param_labels)  # Number of parameters to plot
-    fig, axes = plt.subplots(nrows=n_params, figsize=(10, 2 * n_params))
-    if n_params == 1:
-        axes = [axes]  # Make it iterable if only one parameter
-    for i, ax in enumerate(axes):
-        ax.plot(chain[:, :, i].T, color="k", alpha=0.3)
-        ax.set_title(f'Parameter {i+1}: {param_labels_latex[i]}')
-        ax.set_xlabel("Step Number")
-    plt.tight_layout()
-    fig.savefig(f"{chain_path[:-4]}_trace.png")
+    if include_trace:
+        n_params = len(param_labels)  # Number of parameters to plot
+        fig, axes = plt.subplots(nrows=n_params, figsize=(10, 2 * n_params))
+        if n_params == 1:
+            axes = [axes]  # Make it iterable if only one parameter
+        for i, ax in enumerate(axes):
+            ax.plot(chain[:, :, i].T, color="k", alpha=0.3)
+            ax.set_title(f'Parameter {i+1}: {param_labels_latex[i]}')
+            ax.set_xlabel("Step Number")
+        plt.tight_layout()
+        fig.savefig(f"{chain_path[:-4]}_trace.png")
     
     # Generate table of parameter estimates and uncertainties
     table = []

@@ -35,70 +35,6 @@ def calc_noise_std(intensity, threshold=3.5):
 
     return noise_mean, noise_std
 
-# Reads in the data, returns the data which has coverage of a given species (from simulated intensities)
-def read_file(filename, restfreqs, int_sim, shift=4.33, GHz=False, plot=False, block_interlopers=True):
-    data = np.load(filename, allow_pickle=True)
-
-    # Unpack data arrays
-    freqs = data[0]
-    intensity = data[1]
-    if GHz:
-        freqs *= 1000.
-
-    relevant_freqs = np.zeros(freqs.shape)
-    relevant_intensity = np.zeros(intensity.shape)
-    relevant_yerrs = np.zeros(freqs.shape)
-    covered_trans = []
-
-    # Iterate through rest frequencies to identify their corresponding spectral lines
-    for i, rf in enumerate(restfreqs):
-        thresh = 0.05                                                     # Set a threshold as 5% of the peak intensity...
-        if int_sim[i] > thresh * np.max(int_sim):                         # find significant simulated intensities...
-            vel = (rf - freqs) / rf * ckm + shift                         # calculate velocity shift for each frequency...
-            locs = np.where((vel < (4.33 + 1.5)) & (vel > (4.33 - 1.5)))  # and filter for a velocity range
-
-            if locs[0].size != 0:
-                noise_mean, noise_std = calc_noise_std(intensity[locs])
-                if block_interlopers and (np.max(intensity[locs]) > 3.5 * noise_std): # 3.5σ threshold, 6σ for weaker species
-                    print(f"{GRAY}{rf:10.4f} MHz  |  Interloping line detected.{RESET}")
-                    if plot:
-                        plt.plot(freqs[locs], intensity[locs])
-                        plt.show()
-                else:
-                    # Mark the transition and store relavent data
-                    covered_trans.append(i)
-                    print(f"{GRAY}{rf:10.4f} MHz  |  Line found.{RESET}")
-                    relevant_freqs[locs] = freqs[locs]
-                    relevant_intensity[locs] = intensity[locs]
-                    relevant_yerrs[locs] = np.sqrt(noise_std ** 2 + (intensity[locs] * 0.1) ** 2)
-                if plot:
-                    plt.plot(freqs[locs], intensity[locs])
-                    plt.show()
-            else:
-                print(f"{GRAY}{rf:10.4f} MHz  |  No data.{RESET}")
-
-    # Filter out zero entries to return a sparse, small spectrum
-    mask = relevant_freqs > 0
-    relevant_freqs = relevant_freqs[mask]
-    relevant_intensity = relevant_intensity[mask]
-    relevant_yerrs = relevant_yerrs[mask]
-
-    # A hardcoded shift correction for inproperly corrected DSN data...
-    # relevant_freqs -= 0.367
-
-    return(relevant_freqs, relevant_intensity, relevant_yerrs, covered_trans)
-
-
-# Simulate molecular spectral emission lines for a set of observational parameters
-def predict_intensities(source_size, Ncol, Tex, dV, mol_cat):
-    obs_params = ObsParams("test", source_size=source_size)
-    sim = MolSim("mol sim", mol_cat, obs_params, [4.33], [Ncol], [dV], [Tex], ll=[18000], ul=[27000], gauss=False)
-    freq_sim = sim.freq_sim
-    int_sim = sim.int_sim
-    tau_sim = sim.tau_sim
-    
-    return freq_sim, int_sim, tau_sim
-
 
 # Apply a beam dilution correction factor to intensity data
 @njit(fastmath=True)
@@ -116,30 +52,6 @@ def apply_beam(frequency, intensity, source_size, dish_size):
     intensity_diluted = intensity * dilution_factor
     
     return intensity_diluted
-
-
-# Construct a model of molecular line emissions (can sum over multiple sources to create composite model)
-@njit(fastmath=True)
-def make_model(freqs, intensities, source_size, datagrid_freq, datagrid_ints, vlsr, dV, Tex):    
-    model = np.zeros(datagrid_ints.shape)
-    num_lines = freqs.shape[0]
-
-    # Compute Gaussian profiles for each line and sum them (can use vlsr in place of fixed value)
-    for i in range(num_lines):
-        velocity_grid = (freqs[i] - datagrid_freq) / freqs[i] * ckm  + 4.33  # Convert frequency shifts to velocity space
-        mask = np.abs(velocity_grid - 4.33) < dV * 10
-        
-        # Gaussian profile for the intensity at each frequency point
-        model[mask] += intensities[i] * np.exp(-0.5 * ((velocity_grid[mask] - vlsr) / (dV / 2.355))**2.)
-
-    # Apply the Planck function for thermal radiation, adjusted for the background cosmic temperature (2.7 K)
-    J_T = (h * datagrid_freq * 10**6 / k) * (np.exp((h * datagrid_freq * 10**6) / (k * Tex)) - 1)**-1
-    J_Tbg = (h * datagrid_freq * 10**6 / k) * (np.exp((h * datagrid_freq * 10**6) / (k * 2.7)) - 1)**-1
-
-    # Apply the beam dilution correction to the model
-    model = apply_beam(datagrid_freq, (J_T - J_Tbg) * (1 - np.exp(-model)), source_size, 70)
-
-    return model
 
 
 # Log likelihood for MCMC, evaluates how well a set of model parameters fit the observed data
@@ -213,6 +125,95 @@ def lnprob(theta, datagrid, mol_cat, prior_stds, prior_means):
     return lp + lnlike(theta, datagrid, mol_cat)
 
 
+# Simulate molecular spectral emission lines for a set of observational parameters
+def predict_intensities(source_size, Ncol, Tex, dV, mol_cat):
+    obs_params = ObsParams("test", source_size=source_size)
+    sim = MolSim("mol sim", mol_cat, obs_params, [4.33], [Ncol], [dV], [Tex], ll=[18000], ul=[25000], gauss=False)
+    freq_sim = sim.freq_sim
+    int_sim = sim.int_sim
+    tau_sim = sim.tau_sim
+    
+    return freq_sim, int_sim, tau_sim
+
+
+# Construct a model of molecular line emissions (can sum over multiple sources to create composite model)
+@njit(fastmath=True)
+def make_model(freqs, intensities, source_size, datagrid_freq, datagrid_ints, vlsr, dV, Tex):    
+    model = np.zeros(datagrid_ints.shape)
+    num_lines = freqs.shape[0]
+
+    # Compute Gaussian profiles for each line and sum them (can use vlsr in place of fixed value)
+    for i in range(num_lines):
+        velocity_grid = (freqs[i] - datagrid_freq) / freqs[i] * ckm  + 4.33  # Convert frequency shifts to velocity space
+        mask = np.abs(velocity_grid - 4.33) < dV * 10
+        
+        # Gaussian profile for the intensity at each frequency point
+        model[mask] += intensities[i] * np.exp(-0.5 * ((velocity_grid[mask] - vlsr) / (dV / 2.355))**2.)
+
+    # Apply the Planck function for thermal radiation, adjusted for the background cosmic temperature (2.7 K)
+    J_T = (h * datagrid_freq * 10**6 / k) * (np.exp((h * datagrid_freq * 10**6) / (k * Tex)) - 1)**-1
+    J_Tbg = (h * datagrid_freq * 10**6 / k) * (np.exp((h * datagrid_freq * 10**6) / (k * 2.7)) - 1)**-1
+
+    # Apply the beam dilution correction to the model
+    model = apply_beam(datagrid_freq, (J_T - J_Tbg) * (1 - np.exp(-model)), source_size, 70)
+
+    return model
+
+
+# Reads in the data, returns the data which has coverage of a given species (from simulated intensities)
+def read_file(filename, restfreqs, int_sim, shift=4.33, GHz=False, plot=False, block_interlopers=True):
+    data = np.load(filename, allow_pickle=True)
+
+    # Unpack data arrays
+    freqs = data[0]
+    intensity = data[1]
+    if GHz:
+        freqs *= 1000.
+
+    relevant_freqs = np.zeros(freqs.shape)
+    relevant_intensity = np.zeros(intensity.shape)
+    relevant_yerrs = np.zeros(freqs.shape)
+    covered_trans = []
+
+    # Iterate through rest frequencies to identify their corresponding spectral lines
+    for i, rf in enumerate(restfreqs):
+        thresh = 0.05                                                     # Set a threshold as 5% of the peak intensity...
+        if int_sim[i] > thresh * np.max(int_sim):                         # find significant simulated intensities...
+            vel = (rf - freqs) / rf * ckm + shift                         # calculate velocity shift for each frequency...
+            locs = np.where((vel < (4.33 + 1.5)) & (vel > (4.33 - 1.5)))  # and filter for a velocity range that captures the line features
+
+            if locs[0].size != 0:
+                noise_mean, noise_std = calc_noise_std(intensity[locs])
+                if block_interlopers and (np.max(intensity[locs]) > 3.5 * noise_std): # 3.5σ threshold, 6σ for weaker species
+                    print(f"{GRAY}{rf:10.4f} MHz  |  Interloping line detected.{RESET}")
+                    if plot:
+                        plt.plot(freqs[locs], intensity[locs])
+                        plt.show()
+                else:
+                    # Mark the transition and store relavent data
+                    covered_trans.append(i)
+                    print(f"{GRAY}{rf:10.4f} MHz  |  Line found.{RESET}")
+                    relevant_freqs[locs] = freqs[locs]
+                    relevant_intensity[locs] = intensity[locs]
+                    relevant_yerrs[locs] = np.sqrt(noise_std ** 2 + (intensity[locs] * 0.1) ** 2)
+                if plot:
+                    plt.plot(freqs[locs], intensity[locs])
+                    plt.show()
+            else:
+                print(f"{GRAY}{rf:10.4f} MHz  |  No data.{RESET}")
+
+    # Filter out zero entries to return a sparse, small spectrum
+    mask = relevant_freqs > 0
+    relevant_freqs = relevant_freqs[mask]
+    relevant_intensity = relevant_intensity[mask]
+    relevant_yerrs = relevant_yerrs[mask]
+
+    # A hardcoded shift correction for inproperly corrected DSN data...
+    # relevant_freqs -= 0.367
+
+    return(relevant_freqs, relevant_intensity, relevant_yerrs, covered_trans)
+
+
 def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     print(f"\n{CYAN}Running setup for: {mol_name}, block interlopers = {block_interlopers}.{RESET}")
     catfile = os.path.join(cat_folder, f"{mol_name}.cat")
@@ -231,7 +232,7 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     # Initialize molecular simulation components
     mol_cat = MolCat(mol_name, catfile)
     obs_params = ObsParams("init", dish_size=70)
-    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[4.33], C=[3.4e12], dV=[0.89], T=[7.0], ll=[18000], ul=[27000], gauss=False)
+    sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, vlsr=[4.33], C=[3.4e12], dV=[0.89], T=[7.0], ll=[18000], ul=[25000], gauss=False)
     freq_sim = np.array(sim.freq_sim)
     int_sim = np.array(sim.int_sim)
     
@@ -303,10 +304,10 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
     pos = [initial + perturbation * np.random.randn(ndim) for _ in range(nwalkers)]
     print()
     
-    if template_run and mol_name == "hc5n_hfs" and nruns == 10000:
+    if template_run and mol_name == "hc5n_hfs":
         file_name = os.path.join(fit_folder, mol_name, "chain_template.npy")
     elif template_run:
-        print(f"{RED}Template run selected with incorrect template species or step count. Proceeding with non-template run.{RESET}")
+        print(f"{RED}Template run selected with incorrect template species. Proceeding with non-template run.{RESET}")
         file_name = os.path.join(fit_folder, mol_name, "chain.npy")
     else:
         file_name = os.path.join(fit_folder, mol_name, "chain.npy")
@@ -325,7 +326,7 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
     else:
         # Initialize the sampler without parallelization (ideal for debugging)
         sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(datagrid, mol_cat, prior_stds, prior_means))
-        
+    
         for _ in tqdm(range(nruns), desc=f"MCMC Sampling for {mol_name}", colour='white'):
             sampler.run_mcmc(pos, 1)
             np.save(file_name, sampler.chain)
@@ -335,26 +336,42 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
 if __name__ == "__main__":
     BASE_DIR = os.getcwd()
 
-    config = {
-        'mol_name': 'hc5n_hfs',
-        'fit_folder': os.path.join(BASE_DIR, 'DSN_fit_results'),
-        'cat_folder': os.path.join(BASE_DIR, 'CDMS_catalog'),
-        'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc5n_example.npy'),
-        # 'data_path': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc7n_example.npy'),
-        'block_interlopers': True,
-        'nruns': 10000,
-        'restart': True,
-        'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain_template.npy'),
-        'template_run': True,
-        'parallelize': True,
+    data_paths = {
+        # 'hc5n_hfs': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc5n_example.npy'),
+        # 'hc7n_hfs': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc7n_example.npy'),
+        'hc5n_hfs': os.path.join(BASE_DIR, 'DSN_data', 'cha_mms1_hc5n_example.npy'),
+        'hc7n_hfs': os.path.join(BASE_DIR, 'DSN_data', 'cha_mms1_hc7n_example.npy'),
+        # TODO: run pipeline for HC5N in MMS1 and update result here...
+        # Add more molecules and paths as needed... 
     }
 
+    config = {
+        # These settings are usually changed based on the specific run
+        'mol_name': 'hc7n_hfs',
+        'nruns': 10000,
+        'template_run': False,
+        'restart': False,
+
+        # These settings can usually remain fixed
+        'fit_folder': os.path.join(BASE_DIR, 'DSN_fit_results'),
+        'cat_folder': os.path.join(BASE_DIR, 'CDMS_catalog'),
+        'data_path': None,
+        'block_interlopers': True,
+        'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain_template.npy'),
+        'parallelize': True,
+    }
+        
+    try:
+        config['data_path'] = data_paths.get(config['mol_name'])
+    except KeyError:
+        print(f"{RED}Molecule {config['mol_name']} not found in data_paths. Verify molecule name or update data_paths dictionary.{RESET}")
+        
     datafile, catalogue = init_setup(
         fit_folder=config['fit_folder'],
         cat_folder=config['cat_folder'],
         data_path=config['data_path'],
         mol_name=config['mol_name'],
-        block_interlopers=config['block_interlopers']
+        block_interlopers=config['block_interlopers'],
     )
 
     fit_multi_gaussian(
@@ -366,20 +383,23 @@ if __name__ == "__main__":
         prior_path=config['prior_path'],
         restart=config['restart'],
         template_run=config['template_run'],
-        parallelize=config['parallelize']
+        parallelize=config['parallelize'],
     )
 
     param_labels = [
-        'Source Size [″]', 
+        'Source Size [″]',
         'Nᴄᴏʟ [cm⁻²]',
         'Tᴇx [K]',
         'ᴠʟsʀ [km s⁻¹]',
         'dV [km s⁻¹]'
     ]
-
+    
     # Verify that chain file path matches where data was saved
-    CHAIN_PATH = os.path.join(config['fit_folder'], config['mol_name'], "chain.npy")
-    if os.path.exists(CHAIN_PATH):
-        plot_results(CHAIN_PATH, param_labels)
+    if config['template_run'] and config['mol_name'] == "hc5n_hfs":
+        chain_path = os.path.join(config['fit_folder'], config['mol_name'], "chain_template.npy")
     else:
-        print(f"Chain file not found at {CHAIN_PATH}.")
+        chain_path = os.path.join(config['fit_folder'], config['mol_name'], "chain.npy")
+    if os.path.exists(chain_path):
+        plot_results(chain_path, param_labels, include_trace=False)
+    else:
+        print(f"{RED}Chain file not found at {chain_path}. Exiting.{RESET}")
