@@ -5,6 +5,8 @@
 # Extends prior scripts for spectral simulation and MCMC inference.
 # ----------------------------------------------------------------------------------
 
+# TODO: requirements.txt
+
 import emcee
 import os
 import numpy as np
@@ -95,9 +97,9 @@ def is_within_bounds(theta):
 # Log-prior probability for MCMC, ensuring that a set of model parameters falls within physical and statistical constraints
 def lnprior(theta, prior_stds, prior_means):
     # Unpack model parameters and their corresponding prior distributions
-    source_size, Ncol, Tex, vlsr, dV = theta
-    std_source_size, std_Ncol, std_Tex, std_vlsr, std_dV = prior_stds
-    mean_source_size, mean_Ncol, mean_Tex, mean_vlsr, mean_dV = prior_means
+    source_size, _, Tex, vlsr, dV = theta
+    std_source_size, _, std_Tex, std_vlsr, std_dV = prior_stds
+    mean_source_size, _, mean_Tex, mean_vlsr, mean_dV = prior_means
 
     # Adjust standard deviations for velocity-related parameters to be less restrictive
     std_vlsr = mean_dV * 0.8
@@ -267,7 +269,7 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
 
     # Choose initial parameters and perturbations based on the run type
     if template_run:
-        # Hardcoded values specific for template species like HC5N (Source size, Ncol, Tex, vlsr, dV)
+        # Hardcoded values specific for HC5N as a template species (source size, Ncol, Tex, vlsr, dV)
         initial = np.array([48, 3.4e12, 8.0, 4.3, 0.7575])
         prior_means = initial
         prior_stds = np.array([6.5, 0.34e12, 3.0, 0.06, 0.22])
@@ -307,7 +309,7 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
     if template_run and mol_name == "hc5n_hfs":
         file_name = os.path.join(fit_folder, mol_name, "chain_template.npy")
     elif template_run:
-        print(f"{RED}Template run selected with incorrect template species. Proceeding with non-template run.{RESET}")
+        print(f"{RED}Template run selected with incorrect template species. Proceeding with non-template chain run.{RESET}")
         file_name = os.path.join(fit_folder, mol_name, "chain.npy")
     else:
         file_name = os.path.join(fit_folder, mol_name, "chain.npy")
@@ -341,7 +343,6 @@ if __name__ == "__main__":
         # 'hc7n_hfs': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc7n_example.npy'),
         'hc5n_hfs': os.path.join(BASE_DIR, 'DSN_data', 'cha_mms1_hc5n_example.npy'),
         'hc7n_hfs': os.path.join(BASE_DIR, 'DSN_data', 'cha_mms1_hc7n_example.npy'),
-        # TODO: run pipeline for HC5N in MMS1 and update result here...
         # Add more molecules and paths as needed... 
     }
 
@@ -360,7 +361,7 @@ if __name__ == "__main__":
         'prior_path': os.path.join(BASE_DIR, 'DSN_fit_results', 'hc5n_hfs', 'chain_template.npy'),
         'parallelize': True,
     }
-        
+    
     try:
         config['data_path'] = data_paths.get(config['mol_name'])
     except KeyError:
