@@ -265,6 +265,7 @@ class SpectralFitMCMC:
             prior_means = initial
             prior_stds = np.array([6.5, 0.34e12, 3.0, 0.06, 0.22])
             print(f"{GRAY}Using hardcoded priors and initial positions for a template run of {self.mol_name}.{RESET}")
+            file_name = os.path.join(self.fit_folder, self.mol_name, "chain_template.npy")
         else:
             # Load priors from previous chain data
             if not os.path.exists(self.prior_path):
@@ -276,7 +277,7 @@ class SpectralFitMCMC:
             percentile_16 = np.mean(np.percentile(psamples, 16, axis=1), axis=1)
             percentile_84 = np.mean(np.percentile(psamples, 84, axis=1), axis=1)
             prior_stds = np.abs((percentile_16 + percentile_84 - 2 * prior_means) / 2.0)
-            print(f"{GRAY}Loading priors from chain.{RESET}")
+            file_name = os.path.join(self.fit_folder, self.mol_name, "chain.npy")
 
             if prior_means.shape == (5,) and prior_stds.shape == (5,) and prior_means.ndim == 1 and prior_stds.ndim == 1:
                 print(f"{GRAY}Priors are correctly shaped as 1-dimensional arrays with 5 elements each.{RESET}")
@@ -302,7 +303,7 @@ class SpectralFitMCMC:
                 sampler = emcee.EnsembleSampler(self.nwalkers, ndim, self.lnprob, args=(datagrid, mol_cat, prior_stds, prior_means), pool=pool)
                 for _ in tqdm(range(self.config['nruns']), desc=f"MCMC Sampling for {self.mol_name}", colour='white'):
                     sampler.run_mcmc(pos, 1)
-                    np.save(os.path.join(self.fit_folder, self.mol_name, "chain.npy"), sampler.chain)
+                    np.save(file_name, sampler.chain)
                     pos = sampler.chain[:, -1, :]
             return sampler.chain
         else:
@@ -310,7 +311,7 @@ class SpectralFitMCMC:
             sampler = emcee.EnsembleSampler(self.nwalkers, ndim, self.lnprob, args=(datagrid, mol_cat, prior_stds, prior_means))
             for _ in tqdm(range(self.config['nruns']), desc=f"MCMC Sampling for {self.mol_name}", colour='white'):
                 sampler.run_mcmc(pos, 1)
-                np.save(os.path.join(self.fit_folder, self.mol_name, "chain.npy"), sampler.chain)
+                np.save(file_name, sampler.chain)
                 pos = sampler.chain[:, -1, :]
             return sampler.chain
 
@@ -334,10 +335,10 @@ if __name__ == "__main__":
     
     config = {
         # Frequently adjusted for specific MCMC runs
-        'mol_name':          'hc5n_hfs',    # Molecule name, as in CDMS catalog
+        'mol_name':          'hc5n_hfs',    # Molecule name, as named in CDMS_catalog
         'template_run':      True,          # True for template species; load initial positions on first run
         'restart':           True,          # False for first template run, True to load prior chain for subsequent runs
-        'nruns':             1000,         # MCMC iterations; higher values improve convergence
+        'nruns':             10000,         # MCMC iterations; higher values improve convergence
         'nwalkers':          128,           # Number of walkers; more walkers explore parameter space better
 
         # Observation-specific settings for spectra, needs to be changed once
@@ -345,7 +346,6 @@ if __name__ == "__main__":
         'lower_limit':       18000,         # Lower frequency limit (MHz)
         'upper_limit':       25000,         # Upper frequency limit (MHz)
         'aligned_velocity':  4.33,          # Velocity for spectral alignment (km/s)
-
 
         # Usually unchanged unless paths or setup are modified
         'block_interlopers': True,          # Recommended True to block interloping lines
