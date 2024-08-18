@@ -5,23 +5,47 @@
 # Extends prior scripts for spectral simulation and MCMC inference.
 # ----------------------------------------------------------------------------------
 
+import os
+import sys
 import corner
 import numpy as np
 import time as tm
 import matplotlib.pyplot as plt
 from tabulate import tabulate
+from contextlib import contextmanager
 from numpy import exp as exp
-from constants import *
+from spectral_simulator.constants import *
 
-# Generate corner (scatterplot matrices) and trace (time-series) plots
-def plot_results(chain_path, param_labels, include_trace=False):
-    param_labels_latex = [
-        r'Source Size [$^{\prime\prime}$]', 
-        r'N$_{\mathrm{col}}$ [cm$^{-2}$]',
-        r'T$_{\mathrm{ex}}$ [K]',
-        r'v$_{\mathrm{lsr}}$ [km s$^{-1}$]', 
-        r'dV [km s$^{-1}$]'
-    ]
+@contextmanager
+def suppress_output():
+    with open(os.devnull, 'w') as devnull:
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        try:
+            sys.stdout = devnull
+            sys.stderr = devnull
+            yield
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+
+# Generate custom corner (scatterplot matrices), trace (time-series) plots, and table of best-fit values
+def plot_results(chain_path, param_labels, velocity_components=1, include_trace=False):
+    if velocity_components == 4:
+        param_labels_latex = [
+            r'Source Size$_1$ [$^{\prime\prime}$]', r'Source Size$_2$ [$^{\prime\prime}$]', 
+            r'Source Size$_3$ [$^{\prime\prime}$]', r'Source Size$_4$ [$^{\prime\prime}$]', 
+            r'N$_{\mathrm{col}_1}$ [cm$^{-2}$]', r'N$_{\mathrm{col}_2}$ [cm$^{-2}$]', 
+            r'N$_{\mathrm{col}_3}$ [cm$^{-2}$]', r'N$_{\mathrm{col}_4}$ [cm$^{-2}$]', 
+            r'T$_{\mathrm{ex}}$ [K]', r'v$_{\mathrm{lsr}_1}$ [km s$^{-1}$]', 
+            r'v$_{\mathrm{lsr}_2}$ [km s$^{-1}$]', r'v$_{\mathrm{lsr}_3}$ [km s$^{-1}$]', 
+            r'v$_{\mathrm{lsr}_4}$ [km s$^{-1}$]', r'dV [km s$^{-1}$]'
+        ]
+    else:
+        param_labels_latex = [
+            r'Source Size [$^{\prime\prime}$]', r'N$_{\mathrm{col}}$ [cm$^{-2}$]', 
+            r'T$_{\mathrm{ex}}$ [K]', r'v$_{\mathrm{lsr}}$ [km s$^{-1}$]', r'dV [km s$^{-1}$]'
+        ]
     
     plt.rcParams.update({
         "text.usetex": True,
@@ -103,7 +127,10 @@ def plot_results(chain_path, param_labels, include_trace=False):
     colalign = ["center"] * len(headers)
     print("\n" + tabulate(table, headers=headers, tablefmt="grid", colalign=colalign) + "\n")
 
+#---------------------------------------------------------------------------------------
 # Everything below this remains unchanged from the original spectral simulator codebase.
+#---------------------------------------------------------------------------------------
+
 # Calculate a partition function at a given T.  The catalog used must have enough lines in it to fully capture the partition function, or the result will not be accurate for Q.
 def calc_q(catalog, T):
     Q = 0.

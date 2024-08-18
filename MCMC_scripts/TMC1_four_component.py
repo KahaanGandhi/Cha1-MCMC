@@ -2,19 +2,26 @@
 # Developer: Kahaan Gandhi
 # Based on methodologies described in:
 # Loomis, R.A. et al., Nat Astron 5, 188–196 (2021), DOI: 10.1038/s41550-020-01261-4
-# Extends prior scripts for spectral simulation and MCMC inference.
+# Adapts original MCMC code for TMC-1 GOTHAM spectra with four velocity components.
 # ----------------------------------------------------------------------------------
 
 import numpy as np
 import emcee
 import matplotlib.pyplot as plt
 import os
+import sys
 from multiprocessing import Pool
 from numba import njit
 from tqdm import tqdm
-from classes import *
-from constants import *
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+base_dir = os.path.abspath(os.path.join(current_dir, '..'))
+spectral_simulator_dir = os.path.join(base_dir, 'spectral_simulator')
+sys.path.insert(0, base_dir)
+sys.path.insert(0, spectral_simulator_dir)
+
+from spectral_simulator.classes import *
+from spectral_simulator.constants import *
 
 # Calculates local RMS noise in a given spectrum by iteratively masking outliers. 3.5σ default, 6σ for weaker species. 
 def calc_noise_std(intensity, threshold=3.5):
@@ -23,37 +30,37 @@ def calc_noise_std(intensity, threshold=3.5):
     dummy_mean = np.nanmean(dummy_ints)
     dummy_std = np.nanstd(dummy_ints)
 
+    # for _ in range(3):
+    #     for chan in np.where(dummy_ints-dummy_mean < (-dummy_std*threshold))[0]:
+    #         noise[chan-10:chan+10] = np.nan
+    #     for chan in np.where(dummy_ints-dummy_mean > (dummy_std*threshold))[0]:
+    #         noise[chan-10:chan+10] = np.nan
+    #     noise_mean = np.nanmean(noise)
+    #     noise_std = np.nanstd(np.real(noise))
+
     # Repeat 3 times to make sure to avoid any interloping lines
-    for _ in range(3):
-        for chan in np.where(dummy_ints-dummy_mean < (-dummy_std*threshold))[0]:
-            noise[chan-10:chan+10] = np.nan
-        for chan in np.where(dummy_ints-dummy_mean > (dummy_std*threshold))[0]:
-            noise[chan-10:chan+10] = np.nan
-        noise_mean = np.nanmean(noise)
-        noise_std = np.nanstd(np.real(noise))
-        
+    for chan in np.where(dummy_ints-dummy_mean < (-dummy_std*threshold))[0]:
+        noise[chan-10:chan+10] = np.nan
+    for chan in np.where(dummy_ints-dummy_mean > (dummy_std*threshold))[0]:
+        noise[chan-10:chan+10] = np.nan
+    noise_mean = np.nanmean(noise)
+    noise_std = np.nanstd(np.real(noise))
+
+    for chan in np.where(dummy_ints-noise_mean < (-noise_std*threshold))[0]:
+        noise[chan-10:chan+10] = np.nan
+    for chan in np.where(dummy_ints-noise_mean > (noise_std*threshold))[0]:
+        noise[chan-10:chan+10] = np.nan
+    noise_mean = np.nanmean(noise)
+    noise_std = np.nanstd(np.real(noise))
+
+    for chan in np.where(dummy_ints-noise_mean < (-noise_std*threshold))[0]:
+        noise[chan-10:chan+10] = np.nan
+    for chan in np.where(dummy_ints-noise_mean > (noise_std*threshold))[0]:
+        noise[chan-10:chan+10] = np.nan
+    noise_mean = np.nanmean(noise)
+    noise_std = np.nanstd(np.real(noise))
+
     return noise_mean, noise_std
-
-    # for chan in np.where(dummy_ints-dummy_mean < (-dummy_std*threshold))[0]:
-    #     noise[chan-10:chan+10] = np.nan
-    # for chan in np.where(dummy_ints-dummy_mean > (dummy_std*threshold))[0]:
-    #     noise[chan-10:chan+10] = np.nan
-    # noise_mean = np.nanmean(noise)
-    # noise_std = np.nanstd(np.real(noise))
-
-    # for chan in np.where(dummy_ints-noise_mean < (-noise_std*threshold))[0]:
-    #     noise[chan-10:chan+10] = np.nan
-    # for chan in np.where(dummy_ints-noise_mean > (noise_std*threshold))[0]:
-    #     noise[chan-10:chan+10] = np.nan
-    # noise_mean = np.nanmean(noise)
-    # noise_std = np.nanstd(np.real(noise))
-
-    # for chan in np.where(dummy_ints-noise_mean < (-noise_std*threshold))[0]:
-    #     noise[chan-10:chan+10] = np.nan
-    # for chan in np.where(dummy_ints-noise_mean > (noise_std*threshold))[0]:
-    #     noise[chan-10:chan+10] = np.nan
-    # noise_mean = np.nanmean(noise)
-    # noise_std = np.nanstd(np.real(noise))
 
 
 # Reads in the data, returns the data which has coverage of a given species (from simulated intensities)
@@ -137,9 +144,12 @@ def apply_beam(frequency, intensity, source_size, dish_size):
 
 # Construct a composite model of molecular line emissions
 @njit(fastmath=True)
-def make_model(freqs1, ints1, ss1, datagrid0, datagrid1, vlsr1, dV, Tex):
+def make_model(freqs1, freqs2, freqs3, freqs4, ints1, ints2, ints3, ints4, ss1, ss2, ss3, ss4, datagrid0, datagrid1, vlsr1, vlsr2, vlsr3, vlsr4, dV, Tex):
     curr_model = np.zeros(datagrid1.shape)
     model1 = np.zeros(datagrid1.shape)
+    model2 = np.zeros(datagrid1.shape)
+    model3 = np.zeros(datagrid1.shape)
+    model4 = np.zeros(datagrid1.shape)
     nlines = freqs1.shape[0]
 
     # Compute Gaussian profiles for each source and sum them
@@ -149,6 +159,9 @@ def make_model(freqs1, ints1, ss1, datagrid0, datagrid1, vlsr1, dV, Tex):
         
         # Gaussian profiles for the intensity at each frequency point
         model1[mask] += ints1[i]*np.exp(-0.5*((vel_grid[mask] - vlsr1)/(dV/2.355))**2.)
+        model2[mask] += ints2[i]*np.exp(-0.5*((vel_grid[mask] - vlsr2)/(dV/2.355))**2.)
+        model3[mask] += ints3[i]*np.exp(-0.5*((vel_grid[mask] - vlsr3)/(dV/2.355))**2.)
+        model4[mask] += ints4[i]*np.exp(-0.5*((vel_grid[mask] - vlsr4)/(dV/2.355))**2.)
 
     # Apply the Planck function for thermal radiation, adjusted for background cosmic temperature (2.7 K)
     J_T = (h*datagrid0*10**6/k)*(np.exp(((h*datagrid0*10**6)/(k*Tex))) -1)**-1
@@ -156,9 +169,12 @@ def make_model(freqs1, ints1, ss1, datagrid0, datagrid1, vlsr1, dV, Tex):
     
     # Apply the beam dilution correction to each model
     model1 = apply_beam(datagrid0, (J_T - J_Tbg)*(1 - np.exp(-model1)), ss1, 100)
+    model2 = apply_beam(datagrid0, (J_T - J_Tbg)*(1 - np.exp(-model2)), ss2, 100)
+    model3 = apply_beam(datagrid0, (J_T - J_Tbg)*(1 - np.exp(-model3)), ss3, 100)
+    model4 = apply_beam(datagrid0, (J_T - J_Tbg)*(1 - np.exp(-model4)), ss4, 100)
 
     # Sum all the individual models to create the composite model
-    curr_model = model1
+    curr_model = model1 + model2 + model3 + model4
 
     return curr_model
 
@@ -168,20 +184,32 @@ def lnlike(theta, datagrid, mol_cat):
     tot_lnlike = 0.
     yerrs = datagrid[2]
     line_ids = datagrid[3]
-    source_size1, Ncol1, Tex, vlsr1, dV = theta
+    source_size1, source_size2, source_size3, source_size4, Ncol1, Ncol2, Ncol3, Ncol4, Tex, vlsr1, vlsr2, vlsr3, vlsr4, dV = theta
 
     # Simulate spectral lines for each compononent using current parameter values
     freqs1, ints1, taus1 = predict_intensities(source_size1, Ncol1, Tex, dV, mol_cat)
+    freqs2, ints2, taus2 = predict_intensities(source_size2, Ncol2, Tex, dV, mol_cat)
+    freqs3, ints3, taus3 = predict_intensities(source_size3, Ncol3, Tex, dV, mol_cat)
+    freqs4, ints4, taus4 = predict_intensities(source_size4, Ncol4, Tex, dV, mol_cat)
 
     # Select relavent data indices from the predicted spectra
     freqs1 = np.array(freqs1)[line_ids]
+    freqs2 = np.array(freqs2)[line_ids]
+    freqs3 = np.array(freqs3)[line_ids]
+    freqs4 = np.array(freqs4)[line_ids]
 
     taus1 = np.array(taus1)[line_ids]
+    taus2 = np.array(taus2)[line_ids]
+    taus3 = np.array(taus3)[line_ids]
+    taus4 = np.array(taus4)[line_ids]
 
     ints1 = np.array(ints1)[line_ids]
+    ints2 = np.array(ints2)[line_ids]
+    ints3 = np.array(ints3)[line_ids]
+    ints4 = np.array(ints4)[line_ids]
 
     # Construct composite molecular line emission model
-    curr_model = make_model(freqs1, taus1, source_size1, datagrid[0], datagrid[1], vlsr1, dV, Tex)
+    curr_model = make_model(freqs1, freqs2, freqs3, freqs4, taus1, taus2, taus3, taus4, source_size1, source_size2, source_size3, source_size4, datagrid[0], datagrid[1], vlsr1, vlsr2, vlsr3, vlsr4, dV, Tex)
     inv_sigma2 = 1.0/(yerrs**2)  # Inverse of variance
     
     # Compute negative log-likelihood as sum of squared differences between observed and simulated spectra, weighted by inverse variance
@@ -192,26 +220,29 @@ def lnlike(theta, datagrid, mol_cat):
 
 # Apply physical priors (e.g. positivity constraints) and limits. For TMC-1, impose sequential order on velocities
 def is_within_bounds(theta):
-    source_size1, Ncol1, Tex, vlsr1, dV = theta
+    source_size1, source_size2, source_size3, source_size4, Ncol1, Ncol2, Ncol3, Ncol4, Tex, vlsr1, vlsr2, vlsr3, vlsr4, dV = theta
     
     return (
-        0. < source_size1 < 200 and
-        0. < Ncol1 < 10**16. and
-        0. < vlsr1 < 10. and
-        dV < 0.7 and  # TODO: change to 0.7, potentially...
-        2.7 < Tex
+        0. < source_size1 < 200 and 0. < source_size2 < 200 and 0. < source_size3 < 200 and 0. < source_size4 < 200 and
+        0. < Ncol1 < 10**16. and 0. < Ncol2 < 10**16. and 0. < Ncol3 < 10**16. and 0. < Ncol4 < 10**16. and
+        vlsr1 < (vlsr2 - 0.05) and vlsr2 < (vlsr3 - 0.05) and vlsr3 < (vlsr4 - 0.05) and
+        vlsr2 < (vlsr1 + 0.3) and vlsr3 < (vlsr2 + 0.3) and vlsr4 < (vlsr3 + 0.3) and
+        dV < 0.3 and 2.7 < Tex
     )
 
 
 # Log-prior probability for MCMC, ensuring that a set of model parameters falls within physical and statistical constraints
 def lnprior(theta, prior_stds, prior_means):
     # Unpack parameters and prior distributions
-    source_size1, Ncol1, Tex, vlsr1, dV = theta
-    s0, s4, s8, s9, s13 = prior_stds
-    m0, m4, m8, m9, m13 = prior_means
+    source_size1, source_size2, source_size3, source_size4, Ncol1, Ncol2, Ncol3, Ncol4, Tex, vlsr1, vlsr2, vlsr3, vlsr4, dV = theta
+    s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13 = prior_stds
+    m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13 = prior_means
 
     # Adjust standard deviations for velocity-related parameters to be less restrictive (relaxing vlsr and dV)
     s9 = m13*0.8
+    s10 = m13*0.8
+    s11 = m13*0.8
+    s12 = m13*0.8
     s13 = m13*0.3
 
     # Zero likelihood if any parameters are out of bounds to prevent walker from accepting illegal step
@@ -220,14 +251,19 @@ def lnprior(theta, prior_stds, prior_means):
     
     # Compute log-priors for each parameter, assuming a Gaussian distribution centered at prior mean
     p0 = np.log(1.0/(np.sqrt(2*np.pi)*s0))-0.5*(source_size1-m0)**2/s0**2
-
+    p1 = np.log(1.0/(np.sqrt(2*np.pi)*s1))-0.5*(source_size2-m1)**2/s1**2
+    p2 = np.log(1.0/(np.sqrt(2*np.pi)*s2))-0.5*(source_size3-m2)**2/s2**2
+    p3 = np.log(1.0/(np.sqrt(2*np.pi)*s3))-0.5*(source_size4-m3)**2/s3**2
+    
     # We don't use column density, since this won't hold consistent for HC9N <-> linear species
     p8 = np.log(1.0/(np.sqrt(2*np.pi)*s8))-0.5*(Tex-m8)**2/s8**2
     p9 = np.log(1.0/(np.sqrt(2*np.pi)*s9))-0.5*(vlsr1-m9)**2/s9**2
-
+    p10 = np.log(1.0/(np.sqrt(2*np.pi)*s10))-0.5*(vlsr2-m10)**2/s10**2
+    p11 = np.log(1.0/(np.sqrt(2*np.pi)*s11))-0.5*(vlsr3-m11)**2/s11**2
+    p12 = np.log(1.0/(np.sqrt(2*np.pi)*s12))-0.5*(vlsr4-m12)**2/s12**2
     p13 = np.log(1.0/(np.sqrt(2*np.pi)*s13))-0.5*(dV-m13)**2/s13**2
 
-    return p0 + p8 + p9 + p13
+    return p0 + p1 + p2 + p3 + p8 + p9 + p10 + p11 + p12 + p13
 
 
 # Log-probability for MCMC, evaluating model parameters with both prior distribution and observed fit
@@ -241,7 +277,7 @@ def lnprob(theta, datagrid, mol_cat, prior_stds, prior_means):
 # Conduct Markov Chain Monte Carlo (MCMC) inference using emcee's ensemble sampler
 def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_path, restart=True, template_run=False):
     print(f"Fitting column densities for {mol_name}. Restart = {restart}.")
-    ndim, nwalkers = 5, 128
+    ndim, nwalkers = 14, 128
     if not os.path.exists(datafile):
         raise FileNotFoundError(f"The data file {datafile} could not be found.")
     datagrid = np.load(datafile, allow_pickle=True)
@@ -250,12 +286,13 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
     # Choose initial parameters and perturbations based on the run type
     if template_run:
         # Hardcoded values specific for template species like HC9N or Benzonitrile
-        # Initial values and standard deviations from Loomis et al. (2021)
-        initial = np.array([56, 2.15e13, 6.7, 5.790, 0.5]) # HC9N
+        # Initial values and standard deviations from published literature, like Loomis et al. (2021)
+        initial = np.array([37, 25, 56, 22, 2.47e12, 11.19e12, 2.20e12, 5.64e12, 6.7, 5.624, 5.790, 5.910, 6.033, 0.117]) # HC9N
         prior_means = initial
-        prior_stds = np.array([6.5, 0.215e13, 0.1, 0.0035, 0.002])  # HC9N
+        prior_stds = np.array([2.5, 2.0, 6.5, 2.0, 0.30e12, 1.75e12, 0.265e12, 1.185e12, 0.1, 0.0015, 0.001, 0.0035, 0.002, 0.002])
         print(f"Using hardcoded priors for a template run of {mol_name}.")
     else:
+        
         # Load priors from previous chain data or specified path
         if not os.path.exists(prior_path):
             raise FileNotFoundError(f"The prior path {prior_path} could not be found.")
@@ -288,8 +325,8 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
             print(f"Continuing from existing chain data of {mol_name}.")
 
     # Initialize walkers with a small perturbation relative to the prior standard deviations
-    perturbation = np.array([1.e-1, 1.e11, 1.e-3, 1.e-3, 1.e-3])
-    pos = [initial + perturbation * np.random.randn(ndim) for _ in range(nwalkers)]
+    perturbation = np.array([1.e-1, 1.e-1, 1.e-1, 1.e-1, 1.e10, 1.e10, 1.e10, 1.e10, 1.e-3, 1.e-3, 1.e-3, 1.e-3, 1.e-3, 1.e-3])
+    pos = [initial + perturbation * np.random.randn(ndim) for i in range(nwalkers)]
 
     # Ensure all initial positions are valid, ideally in a tight ball (as per emcee documentation)
     if len(pos) != nwalkers:
@@ -304,7 +341,7 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
         # Perform affine invariant MCMC sampling with Gelman-Rubin convergence
         for i in tqdm(range(nruns), desc=f"MCMC Sampling for {mol_name}"):
             sampler.run_mcmc(pos, 1)
-            file_name = os.path.join(fit_folder, mol_name, "chain_one.npy")
+            file_name = os.path.join(fit_folder, mol_name, "chain.npy")
             np.save(file_name, sampler.chain)
             pos = sampler.chain[:, -1, :]
 
@@ -328,7 +365,7 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
     sim = MolSim(f"{mol_name} sim 8K", mol_cat, obs_params, [0.0], [7.e11], [0.37], [8.], ll=[7000], ul=[30000], gauss=False)
     freq_sim = np.array(sim.freq_sim)
     int_sim = np.array(sim.int_sim)
-    
+
     # Read and process spectral data
     print(f"Reading in data from {data_path}")
     freqs_gotham, ints_gotham, yerrs_gotham, covered_trans_gotham = read_file(data_path, freq_sim, int_sim, block_interlopers=block_interlopers, plot=False)
@@ -349,18 +386,18 @@ def init_setup(fit_folder, cat_folder, data_path, mol_name, block_interlopers):
 
 
 if __name__ == "__main__":
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
     input_dict = {
-        'mol_name': 'hc7n_hfs',
+        'mol_name': 'hc9n_hfs',
         'fit_folder': os.path.join(BASE_DIR, 'GOTHAM_fit_results'),
         'cat_folder': os.path.join(BASE_DIR, 'CDMS_catalog'),
-        'data_path': os.path.join(BASE_DIR, 'GOTHAM_data', 'hc7n_hfs_chunks.npy'),
+        'data_path': os.path.join(BASE_DIR, 'GOTHAM_data', 'hc9n_hfs_chunks.npy'),
         'block_interlopers': True,
         'nruns': 10000,
-        'restart': True,
-        'prior_path': os.path.join(BASE_DIR, 'GOTHAM_fit_results', 'hc9n_hfs', 'chain_one.npy'),
-        'template_run': True
+        'restart': False,
+        'prior_path': os.path.join(BASE_DIR, 'GOTHAM_fit_results', 'hc9n_hfs', 'chain.npy'),
+        'template_run': False
     }
 
     datafile, catalogue = init_setup(
@@ -383,16 +420,16 @@ if __name__ == "__main__":
     )
     
     param_labels = [
-        'Source Size #1 [″]', 
-        'Ncol #1 [cm⁻²]', 
+        'Source Size #1 [″]', 'Source Size #2 [″]', 'Source Size #3 [″]', 'Source Size #4 [″]',
+        'Ncol #1 [cm⁻²]', 'Ncol #2 [cm⁻²]', 'Ncol #3 [cm⁻²]', 'Ncol #4 [cm⁻²]',
         'Tex [K]',
-        'vlsr #1 [km s⁻¹]', 
+        'vlsr #1 [km s⁻¹]', 'vlsr #2 [km s⁻¹]', 'vlsr #3 [km s⁻¹]', 'vlsr #4 [km s⁻¹]',
         'dV [km s⁻¹]'
     ]
 
     # Verify that chain file path matches where data was saved
-    CHAIN_PATH = os.path.join(input_dict['fit_folder'], input_dict['mol_name'], "chain_one.npy")
+    CHAIN_PATH = os.path.join(input_dict['fit_folder'], input_dict['mol_name'], "chain.npy")
     if os.path.exists(CHAIN_PATH):
-        plot_results(CHAIN_PATH, param_labels)
+        plot_results(CHAIN_PATH, param_labels, velocity_components=4)
     else:
         print(f"Chain file not found at {CHAIN_PATH}.")

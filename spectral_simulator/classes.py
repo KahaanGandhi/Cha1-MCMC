@@ -8,8 +8,8 @@ import numpy as np
 from numpy import exp as exp
 import time as tm
 
-from constants import *
-from functions import *
+from spectral_simulator.constants import *
+from spectral_simulator.functions import *
 
 # Classes used in simulate_lte
 

@@ -2,21 +2,27 @@
 # Developer: Kahaan Gandhi
 # Based on methodologies described in:
 # Loomis, R.A. et al., Nat Astron 5, 188–196 (2021), DOI: 10.1038/s41550-020-01261-4
-# Extends prior scripts for spectral simulation and MCMC inference.
-# ----------------------------------------------------------------------------------
-
-# TODO: requirements.txt
+# This script was developed into a more generalized MCMC inference class.
+# This version uses JIT compilation for hardcoded DSS-43 values.
+#-----------------------------------------------------------------------------------
 
 import emcee
 import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
 from numba import njit
 from tqdm import tqdm
-from classes import *
-from constants import *
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+base_dir = os.path.abspath(os.path.join(current_dir, '..'))
+spectral_simulator_dir = os.path.join(base_dir, 'spectral_simulator')
+sys.path.insert(0, base_dir)
+sys.path.insert(0, spectral_simulator_dir)
+
+from spectral_simulator.classes import *
+from spectral_simulator.constants import *
 
 # Calculates local RMS noise in a given spectrum by iteratively masking outliers. 3.5σ default, 6σ for weaker species. 
 def calc_noise_std(intensity, threshold=3.5):
@@ -81,7 +87,7 @@ def lnlike(theta, datagrid, mol_cat):
     return -0.5 * tot_lnlike
 
 
-# Apply physical priors (e.g. positivity constraints) and limits. For multiple sources, impose sequential order on velocities
+# Set physical priors (e.g. positivity constraints) and limits here. For multiple sources, impose sequential order on velocities
 def is_within_bounds(theta):
     source_size, Ncol, Tex, vlsr, dV = theta
     
@@ -336,7 +342,7 @@ def fit_multi_gaussian(datafile, fit_folder, catalogue, nruns, mol_name, prior_p
 
 
 if __name__ == "__main__":
-    BASE_DIR = os.getcwd()
+    BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
     data_paths = {
         # 'hc5n_hfs': os.path.join(BASE_DIR, 'DSN_data', 'cha_c2_hc5n_example.npy'),
@@ -348,10 +354,10 @@ if __name__ == "__main__":
 
     config = {
         # These settings are usually changed based on the specific run
-        'mol_name': 'hc7n_hfs',
-        'nruns': 10000,
-        'template_run': False,
-        'restart': False,
+        'mol_name': 'hc5n_hfs',
+        'nruns': 1000,
+        'template_run': True,
+        'restart': True,
 
         # These settings can usually remain fixed
         'fit_folder': os.path.join(BASE_DIR, 'DSN_fit_results'),
