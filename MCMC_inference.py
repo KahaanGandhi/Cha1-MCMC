@@ -17,6 +17,7 @@ from numba import njit
 from tqdm import tqdm
 
 from spectral_simulator.classes import *
+from spectral_simulator.functions import *
 from spectral_simulator.constants import *
 
 # Functions optimized with @njit (Numba doesn't compile methods with 'self', so attributes are passed as arguments)
