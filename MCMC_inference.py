@@ -11,6 +11,7 @@
 # TODO: add example scripts to README (see what can go public)
 # TODO: find a good name for repo, main class, and main filename
 # TODO: test the installation and running instructions on new machine
+# TODO: add bibtex citation
 # MIDAS: MCMC Inference for Detection and Analysis of Spectra
 
 import emcee

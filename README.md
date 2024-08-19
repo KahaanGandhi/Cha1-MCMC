@@ -27,7 +27,7 @@ conda install <package-name>
 
 ### Step 1: Preparing the Data
 
-- Verify your data is in the correct `.npy` format, containing frequency and intensity arrays for the molecule of interest.
+- Verify your data is in the correct `.npy` format, containing frequency and intensity arrays for the molecule of interest. Refer to `DSN_pipeline.ipynb`  for guidance on reformatting common file formats.
 - Add your data to the `data_paths` section of the configuration in `MCMC_inference.py`, following the format:
 ```python
 'molecule_name': os.path.join(os.getcwd(), 'your_data_folder', 'your_data_file.npy'),
