@@ -6,7 +6,12 @@
 #
 # Now allows for customizing MCMC sampling and observation parameters (see main function).
 # Includes telescope settings, input paths, and sampling configuration.
-# ----------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------
+
+# TODO: add example scripts to README (see what can go public)
+# TODO: find a good name for repo, main class, and main filename
+# TODO: test the installation and running instructions on new machine
+# MIDAS: MCMC Inference for Detection and Analysis of Spectra
 
 import emcee
 import os
@@ -251,14 +256,14 @@ class SpectralFitMCMC:
 
     # Conduct Markov Chain Monte Carlo (MCMC) inference using emcee's ensemble sampler
     def fit_multi_gaussian(self, datafile, catalogue):
-        print(f"{CYAN}Fitting column densities for {self.mol_name}. Restart = {self.config['restart']}.{RESET}")
+        print(f"{CYAN}Fitting column densities for {self.mol_name}.{RESET}")
         ndim = 5
         if not os.path.exists(datafile):
             raise FileNotFoundError(f"{RED}The data file {datafile} could not be found.{RESET}")
         datagrid = np.load(datafile, allow_pickle=True)
         mol_cat = MolCat(self.mol_name, catalogue)
 
-        # Choose initial parameters and perturbations based on the run type
+        # Choose initial parameters and perturbations based on run type
         if self.config['template_run']:
             # Hardcoded values specific for HC5N as a template species (source size, Ncol, Tex, vlsr, dV)
             initial = np.array([48, 3.4e12, 8.0, 4.3, 0.7575])
@@ -274,23 +279,21 @@ class SpectralFitMCMC:
             psamples = np.load(self.prior_path).T
             print(f"{GRAY}Dimensions of samples loaded from chain: {psamples.shape}{RESET}")
             prior_means = np.mean(np.percentile(psamples, 50, axis=1), axis=1)
-            percentile_16 = np.mean(np.percentile(psamples, 16, axis=1), axis=1)
-            percentile_84 = np.mean(np.percentile(psamples, 84, axis=1), axis=1)
-            prior_stds = np.abs((percentile_16 + percentile_84 - 2 * prior_means) / 2.0)
+            percentile_16 = np.percentile(psamples, 16, axis=1).mean(axis=1)
+            percentile_84 = np.percentile(psamples, 84, axis=1).mean(axis=1)
+            prior_stds = np.abs((percentile_16 - prior_means + percentile_84 - prior_means) / 2.0)
             file_name = os.path.join(self.fit_folder, self.mol_name, "chain.npy")
 
+            # Validate the shape of priors
             if prior_means.shape == (5,) and prior_stds.shape == (5,) and prior_means.ndim == 1 and prior_stds.ndim == 1:
                 print(f"{GRAY}Priors are correctly shaped as 1-dimensional arrays with 5 elements each.{RESET}")
             else:
                 raise ValueError(f"{RED}Error: priors should be 1-dimensional arrays with 5 elements each.{RESET}")
 
-            if self.config['restart']:
-                initial = np.array([48, 3.4e12, 11.0, 4.3, 0.7575])
-                print(f"{GRAY}Using hardcoded initial positions.{RESET}")
-            else:
-                chain_data = np.load(os.path.join(self.fit_folder, "hc5n_hfs", "chain_template.npy"))[:, -200:, :].reshape(-1, ndim).T
-                initial = np.median(chain_data, axis=1)
-                print(f"{GRAY}Loading initial positions from chain.{RESET}")
+            # Load initial positions from the previous chain for non-template runs
+            chain_data = np.load(self.prior_path)[:, -200:, :].reshape(-1, ndim).T
+            initial = np.median(chain_data, axis=1)
+            print(f"{GRAY}Loading initial positions from chain.{RESET}")
 
         # Initialize walkers with a small perturbation relative to the prior standard deviations
         perturbation = np.array([1.e-1, 0.1 * prior_means[1], 1.e-3, 1.e-3, 1.e-3])
@@ -320,7 +323,7 @@ class SpectralFitMCMC:
         chain = self.fit_multi_gaussian(datafile, catalogue)
         
         # Verify that chain file path matches where data was saved
-        if self.config['template_run'] and self.mol_name == "hc5n_hfs":
+        if self.config['template_run']:
             chain_path = os.path.join(self.fit_folder, self.mol_name, "chain_template.npy")
         else:
             chain_path = os.path.join(self.fit_folder, self.mol_name, "chain.npy")
@@ -336,8 +339,7 @@ if __name__ == "__main__":
     config = {
         # Frequently adjusted for specific MCMC runs
         'mol_name':          'hc5n_hfs',    # Molecule name, as named in CDMS_catalog
-        'template_run':      True,          # True for template species; load initial positions on first run
-        'restart':           True,          # False for first template run, True to load prior chain for subsequent runs
+        'template_run':      True,          # True for template species; hardcoded initial positions for first run
         'nruns':             10000,         # MCMC iterations; higher values improve convergence
         'nwalkers':          128,           # Number of walkers; more walkers explore parameter space better
 
