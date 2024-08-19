@@ -23,6 +23,28 @@ If you encounter any issues with specific packages that aren't available, instal
 conda install <package-name>
 ```
 
+Alternatively, if you prefer to use [MacPorts](https://guide.macports.org/chunked/installing.macports.html), run the following:
+```bash
+# Clone this repository
+git clone https://github.com/KahaanGandhi/Cha1-MCMC.git
+cd Cha1-MCMC
+
+# Install Python 3.9 using MacPorts
+sudo port install python39
+sudo port select --set python python39
+
+# Install pip for Python 3.9
+sudo port install py39-pip
+
+# Install the dependencies from the requirements.txt file
+pip-3.9 install -r requirements.txt
+```
+
+Again, if you encounter any issues with specific packages, install them manually:
+```bash
+sudo port install <package-name>
+```
+
 ## Running Instructions
 
 ### Step 1: Preparing the Data
@@ -48,6 +70,11 @@ conda install <package-name>
 ```bash
 cd /path/to/Cha1-MCMC
 python MCMC_inference.py
+```
+
+For MacPorts users, remember to explictly call the correct Python version when running scripts. For example, instead of `python`, use:
+```bash
+python3.9 MCMC_inference.py
 ```
 
 ### Step 4: Refining the Fit
