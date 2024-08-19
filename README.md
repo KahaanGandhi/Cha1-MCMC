@@ -22,11 +22,6 @@ If you encounter any issues with specific packages that aren't available, instal
 ```bash
 conda install <package-name>
 ```
-With the environment activated and the dependencies installed, navigate to the main directory and run the MCMC_inference.py script based on the parameters set in the script:
-```bash
-cd /path/to/Cha1-MCMC
-python MCMC_inference.py
-```
 
 ## Running Instructions
 
@@ -51,6 +46,7 @@ python MCMC_inference.py
 - Cyanopolyynes like HC<sub>5</sub>N tend to share source properties, so it is recommended to first obtain a fit for shorter linear molecules, as their transitions are more easily detectable above noise levels.
 - Run the script from the main directory:
     ```bash
+    cd /path/to/Cha1-MCMC
     python MCMC_inference.py
     ```
 
