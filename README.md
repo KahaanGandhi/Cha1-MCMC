@@ -22,15 +22,43 @@ If you encounter any issues with specific packages that aren't available, instal
 ```bash
 conda install <package-name>
 ```
-With the environment activated and the dependencies installed, navigate to the main directory and run the MCMC_inference.py script:
+With the environment activated and the dependencies installed, navigate to the main directory and run the MCMC_inference.py script based on the parameters set in the script:
 ```bash
 cd /path/to/Cha1-MCMC
 python MCMC_inference.py
 ```
-This will start the MCMC inference based on the parameters set in the script.
 
+## Running Instructions
 
+### Step 1: Preparing the Data
 
+- Verify your data is in the correct `.npy` format, containing frequency and intensity arrays for the molecule of interest.
+- Add your data to the `data_paths` section of the configuration in `MCMC_inference.py`, following the format:
+    ```python
+    'molecule_name': os.path.join(os.getcwd(), 'your_data_folder', 'your_data_file.npy'),
+    ```
 
+### Step 2: Configuring the MCMC Run
 
+- Open the `MCMC_inference.py` file and locate the `config` dictionary at the bottom of the script.
+- Adjust parameters like `dish_size`, `lower_limit`, `upper_limit`, or `aligned_velocity` to match your telescope and observations. The configuration is currently set up for DSS-43 observations of Chamaeleon I, and should be adjusted accordingly for different telescopes or sources. Verify that your molecule of interest has rotational transitions that fall within the specified frequency range.
 
+- You can also increase `nwalkers` or `nruns` to explore more of the parameter space during MCMC sampling.
+
+### Step 3: Running the Initial MCMC
+
+- For your initial run, set ```template_run``` to ```True``` to use hardcoded initial values specific to the template species.
+- Cyanopolyynes like HC<sub>5</sub>N tend to share source properties, so it is recommended to first obtain a fit for shorter linear molecules, as their transitions are more easily detectable above noise levels.
+- Run the script from the main directory:
+    ```bash
+    python MCMC_inference.py
+    ```
+
+### Step 4: Refining the Fit
+
+- After the initial run, set `template_run` to `False` to load priors from the previous run into the analysis.
+- You can rerun the script to refine the fit:
+    ```bash
+    python MCMC_inference.py
+    ```
+- If desired, you can redo the template run (perhaps with more walkers or steps for a more thorough exploration of the parameter space), which will overwrite the previous template run results.
