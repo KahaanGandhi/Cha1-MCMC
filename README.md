@@ -29,9 +29,9 @@ conda install <package-name>
 
 - Verify your data is in the correct `.npy` format, containing frequency and intensity arrays for the molecule of interest.
 - Add your data to the `data_paths` section of the configuration in `MCMC_inference.py`, following the format:
-    ```python
-    'molecule_name': os.path.join(os.getcwd(), 'your_data_folder', 'your_data_file.npy'),
-    ```
+```python
+'molecule_name': os.path.join(os.getcwd(), 'your_data_folder', 'your_data_file.npy'),
+```
 
 ### Step 2: Configuring the MCMC Run
 
@@ -45,16 +45,16 @@ conda install <package-name>
 - For your initial run, set ```template_run``` to ```True``` to use hardcoded initial values specific to the template species.
 - Cyanopolyynes like HC<sub>5</sub>N tend to share source properties, so it is recommended to first obtain a fit for shorter linear molecules, as their transitions are more easily detectable above noise levels.
 - Run the script from the main directory:
-    ```bash
-    cd /path/to/Cha1-MCMC
-    python MCMC_inference.py
-    ```
+```bash
+cd /path/to/Cha1-MCMC
+python MCMC_inference.py
+```
 
 ### Step 4: Refining the Fit
 
 - After the initial run, set `template_run` to `False` to load priors from the previous run into the analysis.
 - You can rerun the script to refine the fit:
-    ```bash
-    python MCMC_inference.py
-    ```
+```bash
+python MCMC_inference.py
+```
 - If desired, you can redo the template run (perhaps with more walkers or steps for a more thorough exploration of the parameter space), which will overwrite the previous template run results.
