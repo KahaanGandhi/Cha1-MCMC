@@ -72,7 +72,7 @@ cd /path/to/Cha1-MCMC
 python MCMC_inference.py
 ```
 
-For MacPorts users, remember to explictly call the correct Python version when running scripts. For example, instead of `python`, use:
+For MacPorts users, remember to explictly call the correct Python version when running scripts:
 ```bash
 python3.9 MCMC_inference.py
 ```
