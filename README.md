@@ -8,7 +8,7 @@ First, clone this repository to your local machine:
 git clone https://github.com/KahaanGandhi/Cha1-MCMC.git
 cd Cha1-MCMC
 ```
-Create and activate a new Conda environment with the appropriate Python version (e.g., 3.9):
+Create and activate a new Conda environment with the appropriate Python version (3.9):
 
 ```bash
 conda create --name cha1-mcmc-env python=3.9
@@ -85,3 +85,5 @@ python3.9 MCMC_inference.py
 python MCMC_inference.py
 ```
 - If desired, you can redo the template run (perhaps with more walkers or steps for a more thorough exploration of the parameter space), which will overwrite the previous template run results.
+
+If you have any questions or feedback, feel free to reach out via email at [kahaan@gmail.com](mailto:kahaan@gmail.com). A BibTeX citation will be included alongside a forthcoming publication; please cite the software if you found it helpful with your work.
