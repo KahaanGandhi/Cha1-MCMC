@@ -58,7 +58,7 @@ sudo port install <package-name>
 ### Step 2: Configuring the MCMC Run
 
 - Open the `MCMC_inference.py` file and locate the `config` dictionary at the bottom of the script.
-- Adjust parameters like `dish_size`, `lower_limit`, `upper_limit`, or `aligned_velocity` to match your telescope and observations. The configuration is currently set up for DSS-43 observations of Chamaeleon I, and should be adjusted accordingly for different telescopes or sources. Verify that your molecule of interest has rotational transitions that fall within the specified frequency range.
+- Adjust parameters like `dish_size`, `lower_limit`, and `upper_limit` to match your telescope and observations. The configuration is currently set up for DSS-43 observations of Chamaeleon I, and should be adjusted accordingly for different telescopes or sources. Verify that your molecule of interest has rotational transitions that fall within the specified frequency range.
 
 - You can also increase `nwalkers` or `nruns` to explore more of the parameter space during MCMC sampling.
 

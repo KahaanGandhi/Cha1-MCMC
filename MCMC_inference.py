@@ -11,13 +11,21 @@
 # TODO: add example scripts to README (see what can go public)
 # TODO: find a good name for repo, main class, and main filename
 # TODO: test the installation and running instructions on new machine
-# TODO: add bibtex citation
-# MIDAS: MCMC Inference for Detection and Analysis of Spectra
+# TODO: add bibtex citation and help email
+# TODO: add more help to configuration in README
+# TODO: remove self.config['XXX'], replace with __init__ and self.XXX
+
+# QUESTIONS: naming file/class/repo + gift logistics
+
+# COMPLETED: add HC5N in MMS1 as example
+# COMPLETED: run 25k and 27k and compare best-fit spectra
+# COMPLETED: run with source size stuck between 175 and 185 to see column density
 
 import emcee
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+
 from multiprocessing import Pool
 from numba import njit
 from tqdm import tqdm
@@ -61,19 +69,24 @@ def make_model_numba(freqs, intensities, source_size, datagrid_freq, datagrid_in
 
 class SpectralFitMCMC:
     def __init__(self, config):
-        self.config = config
-        self.param_labels = ['Source Size [″]', 'Nᴄᴏʟ [cm⁻²]', 'Tᴇx [K]', 'ᴠʟsʀ [km s⁻¹]', 'dV [km s⁻¹]']
-        self.mol_name = self.config['mol_name']
-        self.fit_folder = self.config['fit_folder']
-        self.cat_folder = self.config['cat_folder']
-        self.data_path = self.config['data_paths'].get(self.mol_name)
-        self.prior_path = self.config['prior_path']
+        self.config            = config
+        self.param_labels      = ['Source Size [″]', 'Nᴄᴏʟ [cm⁻²]', 'Tᴇx [K]', 'ᴠʟsʀ [km s⁻¹]', 'dV [km s⁻¹]']
+        self.mol_name          = self.config['mol_name']
+        self.template_run      = self.config['template_run']
+        self.fit_folder        = self.config['fit_folder']
+        self.cat_folder        = self.config['cat_folder']
+        self.data_path         = self.config['data_paths'].get(self.mol_name)
+        self.prior_path        = self.config['prior_path']
         self.block_interlopers = self.config['block_interlopers']
-        self.lower_limit = self.config['lower_limit']
-        self.upper_limit = self.config['upper_limit']
-        self.aligned_velocity = self.config['aligned_velocity']
-        self.dish_size = self.config['dish_size']
-        self.nwalkers = self.config['nwalkers']
+        self.lower_limit       = self.config['lower_limit']
+        self.upper_limit       = self.config['upper_limit']
+        self.aligned_velocity  = self.config['aligned_velocity']
+        self.dish_size         = self.config['dish_size']
+        self.nwalkers          = self.config['nwalkers']
+        self.nruns             = self.config['nruns']
+        self.template_means    = self.config['template_means']
+        self.template_stds     = self.config['template_stds']
+        self.parallelize       = self.config['parallelize']
 
     # Call standalone @njit-optimized function with required attributes
     def make_model(self, freqs, intensities, source_size, datagrid_freq, datagrid_ints, vlsr, dV, Tex):
@@ -123,15 +136,16 @@ class SpectralFitMCMC:
 
         return -0.5 * tot_lnlike
 
-    # Set physical priors (e.g. positivity constraints) and limits here. For multiple sources, impose sequential order on velocities
     def is_within_bounds(self, theta):
         source_size, Ncol, Tex, vlsr, dV = theta
+        bounds = self.config['bounds']
+
         return (
-            30.0 < source_size < 90.0 and
-            10**8.0 < Ncol < 10**14.0 and
-            3.0 < vlsr < 5.5 and
-            0.35 < dV < 1.5 and
-            3.4 < Tex < 12.0
+            bounds['source_size'][0] < source_size < bounds['source_size'][1] and
+            bounds['Ncol'][0] < Ncol < bounds['Ncol'][1] and
+            bounds['Tex'][0] < Tex < bounds['Tex'][1] and
+            bounds['vlsr'][0] < vlsr < bounds['vlsr'][1] and
+            bounds['dV'][0] < dV < bounds['dV'][1]
         )
 
     # Log-prior probability for MCMC, ensuring that a set of model parameters falls within physical and statistical constraints
@@ -265,12 +279,12 @@ class SpectralFitMCMC:
         mol_cat = MolCat(self.mol_name, catalogue)
 
         # Choose initial parameters and perturbations based on run type
-        if self.config['template_run']:
-            # Hardcoded values specific for HC5N as a template species (source size, Ncol, Tex, vlsr, dV)
-            initial = np.array([48, 3.4e12, 8.0, 4.3, 0.7575])
+        if self.template_run:
+            # Use the configurable template means and standard deviations; order: [source_size, Ncol, Tex, vlsr, dV]
+            initial = self.template_means
             prior_means = initial
-            prior_stds = np.array([6.5, 0.34e12, 3.0, 0.06, 0.22])
-            print(f"{GRAY}Using hardcoded priors and initial positions for a template run of {self.mol_name}.{RESET}")
+            prior_stds = self.template_stds
+            print(f"{GRAY}Using template priors and initial positions for {self.mol_name}.{RESET}")
             file_name = os.path.join(self.fit_folder, self.mol_name, "chain_template.npy")
         else:
             # Load priors from previous chain data
@@ -302,10 +316,10 @@ class SpectralFitMCMC:
         print()
 
         # Perform affine invariant MCMC sampling with Gelman-Rubin convergence
-        if self.config['parallelize']:
+        if self.parallelize:
             with Pool() as pool:
                 sampler = emcee.EnsembleSampler(self.nwalkers, ndim, self.lnprob, args=(datagrid, mol_cat, prior_stds, prior_means), pool=pool)
-                for _ in tqdm(range(self.config['nruns']), desc=f"MCMC Sampling for {self.mol_name}", colour='white'):
+                for _ in tqdm(range(self.nruns), desc=f"MCMC Sampling for {self.mol_name}", colour='white'):
                     sampler.run_mcmc(pos, 1)
                     np.save(file_name, sampler.chain)
                     pos = sampler.chain[:, -1, :]
@@ -313,7 +327,7 @@ class SpectralFitMCMC:
         else:
             # Initialize the sampler without parallelization (ideal for debugging)
             sampler = emcee.EnsembleSampler(self.nwalkers, ndim, self.lnprob, args=(datagrid, mol_cat, prior_stds, prior_means))
-            for _ in tqdm(range(self.config['nruns']), desc=f"MCMC Sampling for {self.mol_name}", colour='white'):
+            for _ in tqdm(range(self.nruns), desc=f"MCMC Sampling for {self.mol_name}", colour='white'):
                 sampler.run_mcmc(pos, 1)
                 np.save(file_name, sampler.chain)
                 pos = sampler.chain[:, -1, :]
@@ -322,9 +336,9 @@ class SpectralFitMCMC:
     def run(self):
         datafile, catalogue = self.init_setup()
         chain = self.fit_multi_gaussian(datafile, catalogue)
-        
+
         # Verify that chain file path matches where data was saved
-        if self.config['template_run']:
+        if self.template_run:
             chain_path = os.path.join(self.fit_folder, self.mol_name, "chain_template.npy")
         else:
             chain_path = os.path.join(self.fit_folder, self.mol_name, "chain.npy")
@@ -339,12 +353,26 @@ if __name__ == "__main__":
     
     config = {
         # Frequently adjusted for specific MCMC runs
-        'mol_name':          'hc5n_hfs',    # Molecule name, as named in CDMS_catalog
-        'template_run':      True,          # True for template species; hardcoded initial positions for first run
-        'nruns':             10000,         # MCMC iterations; higher values improve convergence
+        'mol_name':          'benzonitrile',    # Molecule name, as named in CDMS_catalog
+        'template_run':      False,         # True for template species; hardcoded initial positions for first run
+        'nruns':             4000,         # MCMC iterations; higher values improve convergence
         'nwalkers':          128,           # Number of walkers; more walkers explore parameter space better
 
-        # Observation-specific settings for spectra, needs to be changed once
+        # Physical priors (e.g. positivity constraints and limits)
+        'bounds': {                         
+            'source_size':   [30.0, 90.0],         # Source size in arcseconds
+            'Ncol':          [10**8.0, 10**14.0],  # Column density (cm-²)
+            'Tex':           [3.4, 12.0],          # Excitation temperature (K), avoid values below CMB (2.7 K)
+            'vlsr':          [3.0, 5.5],           # Source velocity (km/s); for multiple sources, force sequential ordering
+            'dV':            [0.35, 1.5],          # Line width (km/s)
+        },
+
+        # Priors for means (μ) and standard deviations (σ) of template species
+        # Order of parameters: [source_size, Ncol, Tex, vlsr, dV]
+        'template_means':    np.array([48., 3.4e11, 8.0, 4.3, 0.7575]),
+        'template_stds':     np.array([6.5, 0.34e11, 3.0, 0.06, 0.22]),
+
+        # Observation-specific settings for spectra
         'dish_size':         70,            # Telescope dish diameter (m)
         'lower_limit':       18000,         # Lower frequency limit (MHz)
         'upper_limit':       25000,         # Upper frequency limit (MHz)
@@ -358,9 +386,12 @@ if __name__ == "__main__":
         'prior_path':        os.path.join(os.getcwd(), 'DSN_fit_results', 'hc5n_hfs', 'chain_template.npy'),
         'data_paths': {
             'hc5n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc5n_example.npy'),
-            'hc7n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc7n_example.npy'),
+            'benzonitrile':  os.path.join(os.getcwd(), 'DSN_data', 'cha-mms1-benzo.npy'),
+            # 'hc7n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc7n_example.npy'),
             # Add more paths here...
         },
     }
     model = SpectralFitMCMC(config)
     model.run()
+    
+    
