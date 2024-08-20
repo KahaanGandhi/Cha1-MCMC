@@ -41,11 +41,15 @@ def plot_results(chain_path, param_labels, velocity_components=1, include_trace=
             r'v$_{\mathrm{lsr}_2}$ [km s$^{-1}$]', r'v$_{\mathrm{lsr}_3}$ [km s$^{-1}$]', 
             r'v$_{\mathrm{lsr}_4}$ [km s$^{-1}$]', r'dV [km s$^{-1}$]'
         ]
-    else:
+    elif velocity_components == 1:
         param_labels_latex = [
             r'Source Size [$^{\prime\prime}$]', r'N$_{\mathrm{col}}$ [cm$^{-2}$]', 
             r'T$_{\mathrm{ex}}$ [K]', r'v$_{\mathrm{lsr}}$ [km s$^{-1}$]', r'dV [km s$^{-1}$]'
         ]
+        
+    else:
+        print(f"{RED}Error: Parameter labels haven't been added for this number of velocity components.{RESET}")
+        return
     
     plt.rcParams.update({
         "text.usetex": True,
