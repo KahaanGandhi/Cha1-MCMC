@@ -353,9 +353,9 @@ if __name__ == "__main__":
     
     config = {
         # Frequently adjusted for specific MCMC runs
-        'mol_name':          'benzonitrile',    # Molecule name, as named in CDMS_catalog
-        'template_run':      False,         # True for template species; hardcoded initial positions for first run
-        'nruns':             4000,         # MCMC iterations; higher values improve convergence
+        'mol_name':          'hc5n_hfs',    # Molecule name, as named in CDMS_catalog
+        'template_run':      True,          # True for template species; hardcoded initial positions for first run
+        'nruns':             10000,         # MCMC iterations; higher values improve convergence
         'nwalkers':          128,           # Number of walkers; more walkers explore parameter space better
 
         # Physical priors (e.g. positivity constraints and limits)
@@ -369,8 +369,8 @@ if __name__ == "__main__":
 
         # Priors for means (μ) and standard deviations (σ) of template species
         # Order of parameters: [source_size, Ncol, Tex, vlsr, dV]
-        'template_means':    np.array([48., 3.4e11, 8.0, 4.3, 0.7575]),
-        'template_stds':     np.array([6.5, 0.34e11, 3.0, 0.06, 0.22]),
+        'template_means':    np.array([48., 3.4e12, 8.0, 4.3, 0.7575]),
+        'template_stds':     np.array([6.5, 0.34e12, 3.0, 0.06, 0.22]),
 
         # Observation-specific settings for spectra
         'dish_size':         70,            # Telescope dish diameter (m)
