@@ -1,3 +1,5 @@
+Spectroscopic observations enable studies of the chemical composition of star-forming regions based on their distinct molecular emission and absorption spectra. The difficulty of detecting complex organic molecules, which probe chemical complexity, scales with their size — emission from heavy molecules is distributed over many lines, too weak to detect individually. To address this, MCMC algorithms have been implemented to enhance signal detection in radio spectra by efficiently exploring high-dimensional parameter space and fitting spectral models to sparse observations. These methods have been successfully applied to DSS-43 Deep Space Network (DSN) 70-m antenna observations of the Chamaeleon I molecular cloud, with results detailed in a forthcoming publication. The code is ready to be adapted for new sources, facilitating future research in molecular detection through multi-transition radio observations.
+
 ## Installation Instructions
 
 Ensure you have [Conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) installed on your machine before proceeding with the setup.
