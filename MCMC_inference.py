@@ -8,18 +8,15 @@
 # Includes telescope settings, input paths, and sampling configuration.
 #-----------------------------------------------------------------------------------------
 
-# TODO: add example scripts to README (see what can go public)
-# TODO: find a good name for repo, main class, and main filename
-# TODO: test the installation and running instructions on new machine
-# TODO: add bibtex citation and help email
-# TODO: add more help to configuration in README
-# TODO: remove self.config['XXX'], replace with __init__ and self.XXX
+# QUESTIONS: gift logistics
 
-# QUESTIONS: naming file/class/repo + gift logistics
+# TODO: benzonitrile: fix source size, dV (yikes!)
+# TODO: try relaxing certain variances to allow for covariant exploration
+# TODO: README: more help with config, paragraph at top
 
-# COMPLETED: add HC5N in MMS1 as example
-# COMPLETED: run 25k and 27k and compare best-fit spectra
-# COMPLETED: run with source size stuck between 175 and 185 to see column density
+# COMPLETED: report on benefits/framework of matched filtering
+# COMPLETED: for low SS,  lnlike of 74.325
+# COMPLETED: for high SS, lnlike of 74.078 (lower value indicates better fit)
 
 import emcee
 import os
@@ -122,18 +119,21 @@ class SpectralFitMCMC:
         source_size, Ncol, Tex, vlsr, dV = theta
 
         # Simulate spectral lines for each component using current parameter values
-        freqs, ints, taus = self.predict_intensities(source_size, Ncol, Tex, dV, mol_cat)
+        freqs, ints, taus = self.predict_intensities(source_size=source_size, Ncol=Ncol, Tex=Tex, dV=dV, mol_cat=mol_cat)
         freqs = np.array(freqs)[line_indices]
         taus = np.array(taus)[line_indices]
         ints = np.array(ints)[line_indices]
 
         # Construct composite molecular line emission model
-        curr_model = self.make_model(freqs, taus, source_size, datagrid[0], datagrid[1], vlsr, dV, Tex)
+        curr_model = self.make_model(freqs=freqs, intensities=taus, source_size=source_size, datagrid_freq=datagrid[0], datagrid_ints=datagrid[1], vlsr=vlsr, dV=dV, Tex=Tex)
         inv_sigma2 = 1.0 / (yerrs ** 2)
 
         # Compute negative log-likelihood as sum of squared differences between observed and simulated spectra, weighted by inverse variance
         tot_lnlike = np.sum((datagrid[1] - curr_model) ** 2 * inv_sigma2 - np.log(inv_sigma2))
 
+        # Print lnlike values for debugging or comparison (bounds region of interest)
+        # if (179.5 < source_size < 180.5) and (1.70E12 < Ncol < 1.80E12) and (8.05 < Tex < 8.15) and (4.36 < vlsr < 4.40) and (0.80 < dV < 0.86):
+        #     print(-0.5 * tot_lnlike)
         return -0.5 * tot_lnlike
 
     def is_within_bounds(self, theta):
@@ -181,7 +181,7 @@ class SpectralFitMCMC:
     # Simulate molecular spectral emission lines for a set of observational parameters
     def predict_intensities(self, source_size, Ncol, Tex, dV, mol_cat):
         obs_params = ObsParams("test", source_size=source_size)
-        sim = MolSim("mol sim", mol_cat, obs_params, [self.aligned_velocity], [Ncol], [dV], [Tex], ll=[self.lower_limit], ul=[self.upper_limit], gauss=False)
+        sim = MolSim("mol sim", mol_cat, obs_params, vlsr=[self.aligned_velocity], C=[Ncol], dV=[dV], T=[Tex], ll=[self.lower_limit], ul=[self.upper_limit], gauss=False)
         return sim.freq_sim, sim.int_sim, sim.tau_sim
 
     # Reads in the data, returns the data which has coverage of a given species (from simulated intensities)
@@ -276,7 +276,7 @@ class SpectralFitMCMC:
         if not os.path.exists(datafile):
             raise FileNotFoundError(f"{RED}The data file {datafile} could not be found.{RESET}")
         datagrid = np.load(datafile, allow_pickle=True)
-        mol_cat = MolCat(self.mol_name, catalogue)
+        mol_cat = MolCat("mol", catalogue)
 
         # Choose initial parameters and perturbations based on run type
         if self.template_run:
@@ -353,8 +353,8 @@ if __name__ == "__main__":
     
     config = {
         # Frequently adjusted for specific MCMC runs
-        'mol_name':          'hc5n_hfs',    # Molecule name, as named in CDMS_catalog
-        'template_run':      True,          # True for template species; hardcoded initial positions for first run
+        'mol_name':          'benzonitrile',    # Molecule name, as named in CDMS_catalog
+        'template_run':      False,         # True for template species; hardcoded initial positions for first run
         'nruns':             10000,         # MCMC iterations; higher values improve convergence
         'nwalkers':          128,           # Number of walkers; more walkers explore parameter space better
 
@@ -369,8 +369,19 @@ if __name__ == "__main__":
 
         # Priors for means (μ) and standard deviations (σ) of template species
         # Order of parameters: [source_size, Ncol, Tex, vlsr, dV]
-        'template_means':    np.array([48., 3.4e12, 8.0, 4.3, 0.7575]),
-        'template_stds':     np.array([6.5, 0.34e12, 3.0, 0.06, 0.22]),
+        'template_means':    np.array([46.91, 3.4e10, 8.0, 4.3, 0.7575]),
+        'template_stds':     np.array([6.5, 0.34e10, 3.0, 0.06, 0.22]),
+        
+        # # Hardcoded restrictive priors for exploratory benzonitrile runs
+        # 'bounds': {                         
+        #     'source_size':   [46.91, 46.93],
+        #     'Ncol':          [10**8.0, 10**14.0],
+        #     'Tex':           [3.4, 12.0],
+        #     'vlsr':          [4.32, 4.34],
+        #     'dV':            [0.81, 0.83],
+        # },
+        # 'template_means':    np.array([46.92, 3.4e11, 7.0, 4.33, 0.82]),
+        # 'template_stds':     np.array([0.005, 3.4e10, 3.0, 0.01, 0.01]),
 
         # Observation-specific settings for spectra
         'dish_size':         70,            # Telescope dish diameter (m)
@@ -382,11 +393,11 @@ if __name__ == "__main__":
         'block_interlopers': True,          # Recommended True to block interloping lines
         'parallelize':       True,          # True for multiprocessing (faster); False for easier debugging
         'fit_folder':        os.path.join(os.getcwd(), 'DSN_fit_results'), 
-        'cat_folder':        os.path.join(os.getcwd(), 'CDMS_catalog'), 
-        'prior_path':        os.path.join(os.getcwd(), 'DSN_fit_results', 'hc5n_hfs', 'chain_template.npy'),
+        'cat_folder':        os.path.join(os.getcwd(), 'CDMS_catalog'), # TODO: CHANGE BACK 
+        'prior_path':        os.path.join(os.getcwd(), 'DSN_fit_results', 'benzonitrile', 'chain_template.npy'),
         'data_paths': {
             'hc5n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc5n_example.npy'),
-            'benzonitrile':  os.path.join(os.getcwd(), 'DSN_data', 'cha-mms1-benzo.npy'),
+            'benzonitrile':  os.path.join(os.getcwd(), 'DSN_data', 'cha-c2-benzo.npy'),
             # 'hc7n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc7n_example.npy'),
             # Add more paths here...
         },
