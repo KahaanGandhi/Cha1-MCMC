@@ -8,16 +8,6 @@
 # Includes telescope settings, input paths, and sampling configuration.
 #-----------------------------------------------------------------------------------------
 
-# QUESTIONS: gift logistics
-
-# TODO: benzonitrile: fix source size, dV (yikes!)
-# TODO: try relaxing certain variances to allow for covariant exploration
-# TODO: README: more help with config, paragraph at top
-
-# COMPLETED: report on benefits/framework of matched filtering
-# COMPLETED: for low SS,  lnlike of 74.325
-# COMPLETED: for high SS, lnlike of 74.078 (lower value indicates better fit)
-
 import emcee
 import os
 import numpy as np
@@ -149,7 +139,7 @@ class SpectralFitMCMC:
         )
 
     # Log-prior probability for MCMC, ensuring that a set of model parameters falls within physical and statistical constraints
-    def lnprior(self, theta, prior_stds, prior_means):
+    def lnprior(self, theta, prior_stds, prior_means, weight=1.0):
         source_size, _, Tex, vlsr, dV = theta
         std_source_size, _, std_Tex, std_vlsr, std_dV = prior_stds
         mean_source_size, _, mean_Tex, mean_vlsr, mean_dV = prior_means
@@ -168,8 +158,8 @@ class SpectralFitMCMC:
         log_prior_vlsr = np.log(1.0 / (np.sqrt(2 * np.pi) * std_vlsr)) - 0.5 * ((vlsr - mean_vlsr) ** 2 / std_vlsr ** 2)
         log_prior_dV = np.log(1.0 / (np.sqrt(2 * np.pi) * std_dV)) - 0.5 * ((dV - mean_dV) ** 2 / std_dV ** 2)
 
-        # Vary weight to incentivize/punish exploration from previously successful observational parameters
-        return 1.0 * (log_prior_source_size + log_prior_Tex + log_prior_vlsr + log_prior_dV)
+        # Weight incentivizes/punishes exploration from previously successful observational parameters
+        return weight * (log_prior_source_size + log_prior_Tex + log_prior_vlsr + log_prior_dV)
 
     # Log-probability for MCMC, evaluating model parameters with both prior distribution and observed fit
     def lnprob(self, theta, datagrid, mol_cat, prior_stds, prior_means):
@@ -236,7 +226,7 @@ class SpectralFitMCMC:
 
     def init_setup(self):
         print(f"\n{CYAN}Running setup for: {self.mol_name}, block interlopers = {self.block_interlopers}.{RESET}")
-        catfile = os.path.join(self.cat_folder, f"{self.mol_name}.cat")
+        catfile_path = os.path.join(self.cat_folder, f"{self.mol_name}.cat")
 
         try:
             os.mkdir(self.fit_folder)
@@ -246,11 +236,11 @@ class SpectralFitMCMC:
             os.mkdir(os.path.join(self.fit_folder, self.mol_name))
         except FileExistsError:
             pass
-        if not os.path.exists(catfile):
-            raise FileNotFoundError(f"{RED}No catalog file found at {catfile}.{RESET}")
+        if not os.path.exists(catfile_path):
+            raise FileNotFoundError(f"{RED}No catalog file found at {catfile_path}.{RESET}")
 
         # Initialize molecular simulation components
-        mol_cat = MolCat(self.mol_name, catfile)
+        mol_cat = MolCat(self.mol_name, catfile_path)
         obs_params = ObsParams("init", dish_size=self.dish_size)
         sim = MolSim(f"{self.mol_name} sim 8K", mol_cat, obs_params, vlsr=[self.aligned_velocity], C=[3.4e12], dV=[0.89], T=[7.0], ll=[self.lower_limit], ul=[self.upper_limit], gauss=False)
         freq_sim = np.array(sim.freq_sim)
@@ -267,7 +257,7 @@ class SpectralFitMCMC:
         print(f"\n{CYAN}Saving reduced spectrum to: {datafile_path}{RESET}")
         np.save(datafile_path, datagrid, allow_pickle=True)
 
-        return datafile_path, catfile
+        return datafile_path, catfile_path
 
     # Conduct Markov Chain Monte Carlo (MCMC) inference using emcee's ensemble sampler
     def fit_multi_gaussian(self, datafile, catalogue):
@@ -334,8 +324,8 @@ class SpectralFitMCMC:
             return sampler.chain
 
     def run(self):
-        datafile, catalogue = self.init_setup()
-        chain = self.fit_multi_gaussian(datafile, catalogue)
+        datafile_path, catalogue_path = self.init_setup()
+        chain = self.fit_multi_gaussian(datafile_path, catalogue_path)
 
         # Verify that chain file path matches where data was saved
         if self.template_run:
@@ -353,8 +343,8 @@ if __name__ == "__main__":
     
     config = {
         # Frequently adjusted for specific MCMC runs
-        'mol_name':          'benzonitrile',    # Molecule name, as named in CDMS_catalog
-        'template_run':      False,         # True for template species; hardcoded initial positions for first run
+        'mol_name':          'hc5n_hfs',    # Molecule name, as named in CDMS_catalog
+        'template_run':      True,          # True for template species; hardcoded initial positions for first run
         'nruns':             10000,         # MCMC iterations; higher values improve convergence
         'nwalkers':          128,           # Number of walkers; more walkers explore parameter space better
 
@@ -371,17 +361,6 @@ if __name__ == "__main__":
         # Order of parameters: [source_size, Ncol, Tex, vlsr, dV]
         'template_means':    np.array([46.91, 3.4e10, 8.0, 4.3, 0.7575]),
         'template_stds':     np.array([6.5, 0.34e10, 3.0, 0.06, 0.22]),
-        
-        # # Hardcoded restrictive priors for exploratory benzonitrile runs
-        # 'bounds': {                         
-        #     'source_size':   [46.91, 46.93],
-        #     'Ncol':          [10**8.0, 10**14.0],
-        #     'Tex':           [3.4, 12.0],
-        #     'vlsr':          [4.32, 4.34],
-        #     'dV':            [0.81, 0.83],
-        # },
-        # 'template_means':    np.array([46.92, 3.4e11, 7.0, 4.33, 0.82]),
-        # 'template_stds':     np.array([0.005, 3.4e10, 3.0, 0.01, 0.01]),
 
         # Observation-specific settings for spectra
         'dish_size':         70,            # Telescope dish diameter (m)
@@ -393,11 +372,10 @@ if __name__ == "__main__":
         'block_interlopers': True,          # Recommended True to block interloping lines
         'parallelize':       True,          # True for multiprocessing (faster); False for easier debugging
         'fit_folder':        os.path.join(os.getcwd(), 'DSN_fit_results'), 
-        'cat_folder':        os.path.join(os.getcwd(), 'CDMS_catalog'), # TODO: CHANGE BACK 
-        'prior_path':        os.path.join(os.getcwd(), 'DSN_fit_results', 'benzonitrile', 'chain_template.npy'),
+        'cat_folder':        os.path.join(os.getcwd(), 'CDMS_catalog'),
+        'prior_path':        os.path.join(os.getcwd(), 'DSN_fit_results', 'hc5n_hfs', 'chain_template.npy'),
         'data_paths': {
             'hc5n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc5n_example.npy'),
-            'benzonitrile':  os.path.join(os.getcwd(), 'DSN_data', 'cha-c2-benzo.npy'),
             # 'hc7n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc7n_example.npy'),
             # Add more paths here...
         },
