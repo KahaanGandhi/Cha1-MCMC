@@ -1,11 +1,7 @@
 #------------------------------------------------------------------------------------------
 # Developer: Kahaan Gandhi
-# Based on methodologies described in:
-# Loomis, R.A. et al., Nat Astron 5, 188–196 (2021), DOI: 10.1038/s41550-020-01261-4
-# Extends prior scripts for spectral simulation and MCMC inference.
-#
-# Now allows for customizing MCMC sampling and observation parameters (see main function).
-# Includes telescope settings, input paths, and sampling configuration.
+# Modified MCMC inference with a fixed the source size parameter.
+# Now only four free parameters are used: Ncol, Tex, vlsr, and dV.
 #-----------------------------------------------------------------------------------------
 
 import emcee
@@ -16,6 +12,7 @@ import matplotlib.pyplot as plt
 from multiprocessing import Pool
 from numba import njit
 from tqdm import tqdm
+from tabulate import tabulate
 
 from spectral_simulator.classes import *
 from spectral_simulator.functions import *
@@ -46,18 +43,17 @@ def make_model_numba(freqs, intensities, source_size, datagrid_freq, datagrid_in
         model[mask] += intensities[i] * np.exp(-0.5 * ((velocity_grid[mask] - vlsr) / (dV / 2.355)) ** 2)
 
     # Apply the Planck function for thermal radiation, adjusted for the background cosmic temperature (2.7 K)
-    J_T = (h * datagrid_freq * 10**6 / k) * (np.exp((h * datagrid_freq * 10**6) / (k * Tex)) - 1) ** -1
-    J_Tbg = (h * datagrid_freq * 10**6 / k) * (np.exp((h * datagrid_freq * 10**6) / (k * 2.7)) - 1) ** -1
+    J_T = (h * datagrid_freq * 1e6 / k) * (np.exp((h * datagrid_freq * 1e6) / (k * Tex)) - 1) ** -1
+    J_Tbg = (h * datagrid_freq * 1e6 / k) * (np.exp((h * datagrid_freq * 1e6) / (k * 2.7)) - 1) ** -1
 
     # Apply the beam dilution correction to the molecular emission model
     model = apply_beam_numba(datagrid_freq, (J_T - J_Tbg) * (1 - np.exp(-model)), source_size, dish_size)
     return model
 
-
 class SpectralFitMCMC:
     def __init__(self, config):
         self.config            = config
-        self.param_labels      = ['Source Size [″]', 'Nᴄᴏʟ [cm⁻²]', 'Tᴇx [K]', 'ᴠʟsʀ [km s⁻¹]', 'dV [km s⁻¹]']
+        self.param_labels      = ['Ncol [cm⁻²]', 'Tex [K]', 'vlsr [km s⁻¹]', 'dV [km s⁻¹]']  # Updated parameter labels
         self.mol_name          = self.config['mol_name']
         self.template_run      = self.config['template_run']
         self.fit_folder        = self.config['fit_folder']
@@ -74,15 +70,18 @@ class SpectralFitMCMC:
         self.template_means    = self.config['template_means']
         self.template_stds     = self.config['template_stds']
         self.parallelize       = self.config['parallelize']
+        self.fixed_source_size = self.config['fixed_source_size']  # Fixed source size
 
     # Call standalone @njit-optimized function with required attributes
-    def make_model(self, freqs, intensities, source_size, datagrid_freq, datagrid_ints, vlsr, dV, Tex):
-        return make_model_numba(freqs, intensities, source_size, datagrid_freq, datagrid_ints, vlsr, dV, Tex, self.aligned_velocity, self.dish_size)
+    def make_model(self, freqs, intensities, datagrid_freq, datagrid_ints, vlsr, dV, Tex):
+        return make_model_numba(freqs=freqs, intensities=intensities, source_size=self.fixed_source_size,
+                                datagrid_freq=datagrid_freq, datagrid_ints=datagrid_ints, vlsr=vlsr, dV=dV, Tex=Tex,
+                                aligned_velocity=self.aligned_velocity, dish_size=self.dish_size)
 
-    def apply_beam(self, frequency, intensity, source_size):
-        return apply_beam_numba(frequency, intensity, source_size, self.dish_size)
+    def apply_beam(self, frequency, intensity):
+        return apply_beam_numba(frequency, intensity, self.fixed_source_size, self.dish_size)
 
-    # Calculates local RMS noise in a given spectrum by iteratively masking outliers. 3.5σ default, 6σ for weaker species. 
+    # Calculates local RMS noise in a given spectrum by iteratively masking outliers. 3.5σ default, 6σ for weaker species.
     def calc_noise_std(self, intensity, threshold=3.5):
         dummy_ints = np.copy(intensity)
         noise = np.copy(intensity)
@@ -106,32 +105,29 @@ class SpectralFitMCMC:
         tot_lnlike = 0.0
         yerrs = datagrid[2]
         line_indices = datagrid[3]
-        source_size, Ncol, Tex, vlsr, dV = theta
+        Ncol, Tex, vlsr, dV = theta  # Updated parameters
 
         # Simulate spectral lines for each component using current parameter values
-        freqs, ints, taus = self.predict_intensities(source_size=source_size, Ncol=Ncol, Tex=Tex, dV=dV, mol_cat=mol_cat)
+        freqs, ints, taus = self.predict_intensities(Ncol=Ncol, Tex=Tex, dV=dV, mol_cat=mol_cat)
         freqs = np.array(freqs)[line_indices]
         taus = np.array(taus)[line_indices]
         ints = np.array(ints)[line_indices]
 
         # Construct composite molecular line emission model
-        curr_model = self.make_model(freqs=freqs, intensities=taus, source_size=source_size, datagrid_freq=datagrid[0], datagrid_ints=datagrid[1], vlsr=vlsr, dV=dV, Tex=Tex)
+        curr_model = self.make_model(freqs=freqs, intensities=taus, datagrid_freq=datagrid[0],
+                                     datagrid_ints=datagrid[1], vlsr=vlsr, dV=dV, Tex=Tex)
         inv_sigma2 = 1.0 / (yerrs ** 2)
 
         # Compute negative log-likelihood as sum of squared differences between observed and simulated spectra, weighted by inverse variance
         tot_lnlike = np.sum((datagrid[1] - curr_model) ** 2 * inv_sigma2 - np.log(inv_sigma2))
 
-        # Print lnlike values for debugging or comparison (bounds region of interest)
-        # if (179.5 < source_size < 180.5) and (1.70E12 < Ncol < 1.80E12) and (8.05 < Tex < 8.15) and (4.36 < vlsr < 4.40) and (0.80 < dV < 0.86):
-        #     print(-0.5 * tot_lnlike)
         return -0.5 * tot_lnlike
 
     def is_within_bounds(self, theta):
-        source_size, Ncol, Tex, vlsr, dV = theta
+        Ncol, Tex, vlsr, dV = theta
         bounds = self.config['bounds']
 
         return (
-            bounds['source_size'][0] < source_size < bounds['source_size'][1] and
             bounds['Ncol'][0] < Ncol < bounds['Ncol'][1] and
             bounds['Tex'][0] < Tex < bounds['Tex'][1] and
             bounds['vlsr'][0] < vlsr < bounds['vlsr'][1] and
@@ -140,9 +136,9 @@ class SpectralFitMCMC:
 
     # Log-prior probability for MCMC, ensuring that a set of model parameters falls within physical and statistical constraints
     def lnprior(self, theta, prior_stds, prior_means, weight=1.0):
-        source_size, _, Tex, vlsr, dV = theta
-        std_source_size, _, std_Tex, std_vlsr, std_dV = prior_stds
-        mean_source_size, _, mean_Tex, mean_vlsr, mean_dV = prior_means
+        Ncol, Tex, vlsr, dV = theta
+        std_Ncol, std_Tex, std_vlsr, std_dV = prior_stds
+        mean_Ncol, mean_Tex, mean_vlsr, mean_dV = prior_means
 
         # Adjust standard deviations for velocity-related parameters to be less restrictive
         std_vlsr = mean_dV * 0.8
@@ -153,13 +149,12 @@ class SpectralFitMCMC:
             return -np.inf
 
         # Calculate log-prior probabilities assuming Gaussian distributions
-        log_prior_source_size = np.log(1.0 / (np.sqrt(2 * np.pi) * std_source_size)) - 0.5 * ((source_size - mean_source_size) ** 2 / std_source_size ** 2)
         log_prior_Tex = np.log(1.0 / (np.sqrt(2 * np.pi) * std_Tex)) - 0.5 * ((Tex - mean_Tex) ** 2 / std_Tex ** 2)
         log_prior_vlsr = np.log(1.0 / (np.sqrt(2 * np.pi) * std_vlsr)) - 0.5 * ((vlsr - mean_vlsr) ** 2 / std_vlsr ** 2)
         log_prior_dV = np.log(1.0 / (np.sqrt(2 * np.pi) * std_dV)) - 0.5 * ((dV - mean_dV) ** 2 / std_dV ** 2)
 
         # Weight incentivizes/punishes exploration from previously successful observational parameters
-        return weight * (log_prior_source_size + log_prior_Tex + log_prior_vlsr + log_prior_dV)
+        return weight * (log_prior_Tex + log_prior_vlsr + log_prior_dV)
 
     # Log-probability for MCMC, evaluating model parameters with both prior distribution and observed fit
     def lnprob(self, theta, datagrid, mol_cat, prior_stds, prior_means):
@@ -169,9 +164,10 @@ class SpectralFitMCMC:
         return lp + self.lnlike(theta, datagrid, mol_cat)
 
     # Simulate molecular spectral emission lines for a set of observational parameters
-    def predict_intensities(self, source_size, Ncol, Tex, dV, mol_cat):
-        obs_params = ObsParams("test", source_size=source_size)
-        sim = MolSim("mol sim", mol_cat, obs_params, vlsr=[self.aligned_velocity], C=[Ncol], dV=[dV], T=[Tex], ll=[self.lower_limit], ul=[self.upper_limit], gauss=False)
+    def predict_intensities(self, Ncol, Tex, dV, mol_cat):
+        obs_params = ObsParams("test", source_size=self.fixed_source_size)
+        sim = MolSim("mol sim", mol_cat, obs_params, vlsr=[self.aligned_velocity], C=[Ncol], dV=[dV], T=[Tex],
+                     ll=[self.lower_limit], ul=[self.upper_limit], gauss=False)
         return sim.freq_sim, sim.int_sim, sim.tau_sim
 
     # Reads in the data, returns the data which has coverage of a given species (from simulated intensities)
@@ -241,14 +237,17 @@ class SpectralFitMCMC:
 
         # Initialize molecular simulation components
         mol_cat = MolCat(self.mol_name, catfile_path)
-        obs_params = ObsParams("init", dish_size=self.dish_size)
-        sim = MolSim(f"{self.mol_name} sim 8K", mol_cat, obs_params, vlsr=[self.aligned_velocity], C=[3.4e12], dV=[0.89], T=[7.0], ll=[self.lower_limit], ul=[self.upper_limit], gauss=False)
+        obs_params = ObsParams("init", dish_size=self.dish_size, source_size=self.fixed_source_size)
+        sim = MolSim(f"{self.mol_name} sim 8K", mol_cat, obs_params, vlsr=[self.aligned_velocity], C=[3.4e12],
+                     dV=[0.89], T=[7.0], ll=[self.lower_limit], ul=[self.upper_limit], gauss=False)
         freq_sim = np.array(sim.freq_sim)
         int_sim = np.array(sim.int_sim)
 
         # Read and process spectral data
         print(f"{CYAN}Reading in spectral data from: {self.data_path}{RESET}")
-        freqs_DSN, ints_DSN, yerrs_DSN, covered_trans_DSN = self.read_file(self.data_path, freq_sim, int_sim, block_interlopers=self.block_interlopers, plot=False)
+        freqs_DSN, ints_DSN, yerrs_DSN, covered_trans_DSN = self.read_file(self.data_path, freq_sim, int_sim,
+                                                                            block_interlopers=self.block_interlopers,
+                                                                            plot=False)
         covered_trans_DSN = np.array(covered_trans_DSN, dtype=int)
 
         # Assemble data grid for MCMC fitting
@@ -262,7 +261,7 @@ class SpectralFitMCMC:
     # Conduct Markov Chain Monte Carlo (MCMC) inference using emcee's ensemble sampler
     def fit_multi_gaussian(self, datafile, catalogue):
         print(f"{CYAN}Fitting column densities for {self.mol_name}.{RESET}")
-        ndim = 5
+        ndim = 4  # Updated number of dimensions
         if not os.path.exists(datafile):
             raise FileNotFoundError(f"{RED}The data file {datafile} could not be found.{RESET}")
         datagrid = np.load(datafile, allow_pickle=True)
@@ -270,7 +269,7 @@ class SpectralFitMCMC:
 
         # Choose initial parameters and perturbations based on run type
         if self.template_run:
-            # Use the configurable template means and standard deviations; order: [source_size, Ncol, Tex, vlsr, dV]
+            # Use the configurable template means and standard deviations; order: [Ncol, Tex, vlsr, dV]
             initial = self.template_means
             prior_means = initial
             prior_stds = self.template_stds
@@ -290,10 +289,10 @@ class SpectralFitMCMC:
             file_name = os.path.join(self.fit_folder, self.mol_name, "chain.npy")
 
             # Validate the shape of priors
-            if prior_means.shape == (5,) and prior_stds.shape == (5,) and prior_means.ndim == 1 and prior_stds.ndim == 1:
-                print(f"{GRAY}Priors are correctly shaped as 1-dimensional arrays with 5 elements each.{RESET}")
+            if prior_means.shape == (4,) and prior_stds.shape == (4,) and prior_means.ndim == 1 and prior_stds.ndim == 1:
+                print(f"{GRAY}Priors are correctly shaped as 1-dimensional arrays with 4 elements each.{RESET}")
             else:
-                raise ValueError(f"{RED}Error: priors should be 1-dimensional arrays with 5 elements each.{RESET}")
+                raise ValueError(f"{RED}Error: priors should be 1-dimensional arrays with 4 elements each.{RESET}")
 
             # Load initial positions from the previous chain for non-template runs
             chain_data = np.load(self.prior_path)[:, -200:, :].reshape(-1, ndim).T
@@ -301,14 +300,15 @@ class SpectralFitMCMC:
             print(f"{GRAY}Loading initial positions from chain.{RESET}")
 
         # Initialize walkers with a small perturbation relative to the prior standard deviations
-        perturbation = np.array([1.e-1, 0.1 * prior_means[1], 1.e-3, 1.e-3, 1.e-3])
+        perturbation = np.array([0.1 * prior_means[0], 1.e-3, 1.e-3, 1.e-3])
         pos = [initial + perturbation * np.random.randn(ndim) for _ in range(self.nwalkers)]
         print()
 
         # Perform affine invariant MCMC sampling with Gelman-Rubin convergence
         if self.parallelize:
             with Pool() as pool:
-                sampler = emcee.EnsembleSampler(self.nwalkers, ndim, self.lnprob, args=(datagrid, mol_cat, prior_stds, prior_means), pool=pool)
+                sampler = emcee.EnsembleSampler(self.nwalkers, ndim, self.lnprob,
+                                                args=(datagrid, mol_cat, prior_stds, prior_means), pool=pool)
                 for _ in tqdm(range(self.nruns), desc=f"MCMC Sampling for {self.mol_name}", colour='white'):
                     sampler.run_mcmc(pos, 1)
                     np.save(file_name, sampler.chain)
@@ -316,7 +316,8 @@ class SpectralFitMCMC:
             return sampler.chain
         else:
             # Initialize the sampler without parallelization (ideal for debugging)
-            sampler = emcee.EnsembleSampler(self.nwalkers, ndim, self.lnprob, args=(datagrid, mol_cat, prior_stds, prior_means))
+            sampler = emcee.EnsembleSampler(self.nwalkers, ndim, self.lnprob,
+                                            args=(datagrid, mol_cat, prior_stds, prior_means))
             for _ in tqdm(range(self.nruns), desc=f"MCMC Sampling for {self.mol_name}", colour='white'):
                 sampler.run_mcmc(pos, 1)
                 np.save(file_name, sampler.chain)
@@ -334,54 +335,143 @@ class SpectralFitMCMC:
             chain_path = os.path.join(self.fit_folder, self.mol_name, "chain.npy")
 
         if os.path.exists(chain_path):
-            plot_results(chain_path, self.param_labels, velocity_components=1, include_trace=False)
+            # Call the custom plotting function
+            plot_results(chain_path, self.param_labels, include_trace=False)
         else:
             print(f"{RED}Chain file not found at {chain_path}. Exiting.{RESET}")
 
+# Custom corner plotting function
+def plot_results(chain_path, param_labels, include_trace=False):
+    param_labels_latex = [
+        r'N$_{\mathrm{col}}$ [cm$^{-2}$]',
+        r'T$_{\mathrm{ex}}$ [K]',
+        r'v$_{\mathrm{lsr}}$ [km s$^{-1}$]',
+        r'dV [km s$^{-1}$]'
+    ]
+
+    plt.rcParams.update({
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.size": 12
+    })
+
+    # Load the MCMC chain
+    chain = np.load(chain_path)
+
+    # Remove burn-in (first 20% of steps)
+    burn_in = int(0.2 * chain.shape[1])
+    chain = chain[:, burn_in:, :]
+
+    # Reshape the chain to (nwalkers*nsteps, ndim)
+    samples = chain.reshape((-1, chain.shape[-1]))
+
+    # Custom title formatter for corner plot
+    def custom_title_formatter(param_index):
+        mcmc = np.percentile(samples[:, param_index], [16, 50, 84])
+        q = np.diff(mcmc)
+        value = mcmc[1]
+        lower = q[0]
+        upper = q[1]
+
+        if abs(value) < 1e-3 or abs(value) > 1e3:
+            base_str = f"{value / 10 ** np.floor(np.log10(value)):.2f}"
+            lower_str = f"{lower / 10 ** np.floor(np.log10(value)):.2f}"
+            upper_str = f"{upper / 10 ** np.floor(np.log10(value)):.2f}"
+            exponent = int(np.floor(np.log10(value)))
+            value_str = f"({base_str}_{{-{lower_str}}}^{{+{upper_str}}}) \\times 10^{{{exponent}}}"
+        else:
+            value_str = f"{value:.2f}"
+            lower_str = f"{lower:.2f}"
+            upper_str = f"{upper:.2f}"
+            value_str = f"{value_str}^{{+{upper_str}}}_{{-{lower_str}}}"
+
+        return f"${value_str}$"
+
+    import corner  # Import here to ensure the function is self-contained
+    # Generate corner plot
+    fig = corner.corner(samples, labels=param_labels_latex, quantiles=[0.16, 0.5, 0.84],
+                        show_titles=True, title_kwargs={"fontsize": 12})
+    axes = np.array(fig.axes).reshape((len(param_labels_latex), len(param_labels_latex)))
+
+    for i in range(len(param_labels_latex)):
+        title = custom_title_formatter(i)
+        axes[i, i].set_title(f"{param_labels_latex[i]}: {title}", fontsize=12)
+
+    fig.savefig(f"{chain_path[:-4]}_corner.png", dpi=600)
+
+    # Generate trace plots
+    if include_trace:
+        n_params = len(param_labels)  # Number of parameters to plot
+        fig, axes = plt.subplots(nrows=n_params, figsize=(10, 2 * n_params))
+        if n_params == 1:
+            axes = [axes]  # Make it iterable if only one parameter
+        for i, ax in enumerate(axes):
+            ax.plot(chain[:, :, i].T, color="k", alpha=0.3)
+            ax.set_title(f'Parameter {i + 1}: {param_labels_latex[i]}')
+            ax.set_xlabel("Step Number")
+        plt.tight_layout()
+        fig.savefig(f"{chain_path[:-4]}_trace.png")
+
+    # Generate table of parameter estimates and uncertainties
+    table = []
+    for i, label in enumerate(param_labels):
+        mcmc = np.percentile(samples[:, i], [16, 50, 84])
+        q = np.diff(mcmc)
+        if abs(mcmc[1]) < 1e-3 or abs(mcmc[1]) > 1e3:
+            median = f"{mcmc[1]:.2e}"
+            lower = f"{q[0]:.2e}"
+            upper = f"{q[1]:.2e}"
+        else:
+            median = f"{mcmc[1]:.5f}"
+            lower = f"{q[0]:.5f}"
+            upper = f"{q[1]:.5f}"
+        table.append([label, median, lower, upper])
+
+    headers = ["Parameter", "Median Estimate", "Lower Uncertainty", "Upper Uncertainty"]
+    colalign = ["center"] * len(headers)
+    print("\n" + tabulate(table, headers=headers, tablefmt="grid", colalign=colalign) + "\n")
 
 if __name__ == "__main__":
-    
+
     config = {
         # Frequently adjusted for specific MCMC runs
         'mol_name':          'hc5n_hfs',    # Molecule name, as named in CDMS_catalog
-        'template_run':      True,          # True for template species; hardcoded initial positions for first run
+        'template_run':      False,         # True for template species; hardcoded initial positions for first run
         'nruns':             10000,         # MCMC iterations; higher values improve convergence
         'nwalkers':          128,           # Number of walkers; more walkers explore parameter space better
 
         # Physical priors (e.g. positivity constraints and limits)
-        'bounds': {                         
-            'source_size':   [30.0, 90.0],         # Source size in arcseconds
-            'Ncol':          [10**8.0, 10**14.0],  # Column density (cm-²)
-            'Tex':           [3.4, 12.0],          # Excitation temperature (K), avoid values below CMB (2.7 K)
-            'vlsr':          [3.0, 5.5],           # Source velocity (km/s); for multiple sources, force sequential ordering
-            'dV':            [0.35, 1.5],          # Line width (km/s)
+        'bounds': {
+            'Ncol':          [10 ** 8.0, 10 ** 14.0],  # Column density (cm-²)
+            'Tex':           [3.4, 12.0],              # Excitation temperature (K), avoid values below CMB (2.7 K)
+            'vlsr':          [3.0, 5.5],               # Source velocity (km/s); for multiple sources, force sequential ordering
+            'dV':            [0.35, 1.5],              # Line width (km/s)
         },
 
         # Priors for means (μ) and standard deviations (σ) of template species
-        # Order of parameters: [source_size, Ncol, Tex, vlsr, dV]
-        'template_means':    np.array([46.91, 3.4e10, 8.0, 4.3, 0.7575]),
-        'template_stds':     np.array([6.5, 0.34e10, 3.0, 0.06, 0.22]),
+        # Order of parameters: [Ncol, Tex, vlsr, dV]
+        'template_means':    np.array([3.4e10, 8.0, 4.3, 0.7575]),
+        'template_stds':     np.array([0.34e10, 3.0, 0.06, 0.22]),
 
         # Observation-specific settings for spectra
         'dish_size':         70,            # Telescope dish diameter (m)
         'lower_limit':       18000,         # Lower frequency limit (MHz)
         'upper_limit':       25000,         # Upper frequency limit (MHz)
         'aligned_velocity':  4.33,          # Velocity for spectral alignment (km/s)
+        'fixed_source_size': 180.0,         # Fixed source size (")
 
         # Usually unchanged unless paths or setup are modified
         'block_interlopers': True,          # Recommended True to block interloping lines
         'parallelize':       True,          # True for multiprocessing (faster); False for easier debugging
-        'fit_folder':        os.path.join(os.getcwd(), 'DSN_fit_results'), 
+        'fit_folder':        os.path.join(os.getcwd(), 'DSN_fit_results'),
         'cat_folder':        os.path.join(os.getcwd(), 'CDMS_catalog'),
         'prior_path':        os.path.join(os.getcwd(), 'DSN_fit_results', 'hc5n_hfs', 'chain_template.npy'),
         'data_paths': {
             'hc5n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc5n_example.npy'),
-            # 'hc7n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc7n_example.npy'),
+            'hc7n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc7n_example.npy'),
             # Add more paths here...
         },
     }
-    
+
     model = SpectralFitMCMC(config)
     model.run()
-    
-    
