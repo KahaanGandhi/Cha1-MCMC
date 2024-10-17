@@ -61,7 +61,7 @@ sudo port install <package-name>
 
 - Open the `MCMC_inference.py` file and locate the `config` dictionary at the bottom of the script.
 - Adjust parameters like `dish_size`, `lower_limit`, and `upper_limit` to match your telescope and observations. The configuration is currently set up for DSS-43 observations of Chamaeleon I, and should be adjusted accordingly for different telescopes or sources. Verify that your molecule of interest has rotational transitions that fall within the specified frequency range.
-
+- Select between fixed or variable source size. Since source size is highly covariant with column density, fixing it can help better constrain column density when it can be estimated through other means. If unknown, source size will be treated as a fifth free parameter.
 - You can also increase `nwalkers` or `nruns` to explore more of the parameter space during MCMC sampling.
 
 ### Step 3: Running the Initial MCMC
