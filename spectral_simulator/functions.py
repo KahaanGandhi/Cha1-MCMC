@@ -30,43 +30,38 @@ def suppress_output():
             sys.stderr = old_stderr
 
 # Generate custom corner (scatterplot matrices), trace (time-series) plots, and table of best-fit values
-def plot_results(chain_path, param_labels, velocity_components=1, include_trace=False):
-    if velocity_components == 4:
-        param_labels_latex = [
-            r'Source Size$_1$ [$^{\prime\prime}$]', r'Source Size$_2$ [$^{\prime\prime}$]', 
-            r'Source Size$_3$ [$^{\prime\prime}$]', r'Source Size$_4$ [$^{\prime\prime}$]', 
-            r'N$_{\mathrm{col}_1}$ [cm$^{-2}$]', r'N$_{\mathrm{col}_2}$ [cm$^{-2}$]', 
-            r'N$_{\mathrm{col}_3}$ [cm$^{-2}$]', r'N$_{\mathrm{col}_4}$ [cm$^{-2}$]', 
-            r'T$_{\mathrm{ex}}$ [K]', r'v$_{\mathrm{lsr}_1}$ [km s$^{-1}$]', 
-            r'v$_{\mathrm{lsr}_2}$ [km s$^{-1}$]', r'v$_{\mathrm{lsr}_3}$ [km s$^{-1}$]', 
-            r'v$_{\mathrm{lsr}_4}$ [km s$^{-1}$]', r'dV [km s$^{-1}$]'
-        ]
-    elif velocity_components == 1:
-        param_labels_latex = [
-            r'Source Size [$^{\prime\prime}$]', r'N$_{\mathrm{col}}$ [cm$^{-2}$]', 
-            r'T$_{\mathrm{ex}}$ [K]', r'v$_{\mathrm{lsr}}$ [km s$^{-1}$]', r'dV [km s$^{-1}$]'
-        ]
-        
-    else:
-        print(f"{RED}Error: Parameter labels haven't been added for this number of velocity components.{RESET}")
-        return
-    
+def plot_results(chain_path, param_labels, include_trace=False):
+    param_labels_latex = []
+    for label in param_labels:
+        if 'Source Size' in label:
+            param_labels_latex.append(r'Source Size ["]')
+        elif 'Ncol' in label:
+            param_labels_latex.append(r'N$_{\mathrm{col}}$ [cm$^{-2}$]')
+        elif 'Tex' in label:
+            param_labels_latex.append(r'T$_{\mathrm{ex}}$ [K]')
+        elif 'vlsr' in label:
+            param_labels_latex.append(r'v$_{\mathrm{lsr}}$ [km s$^{-1}$]')
+        elif 'dV' in label:
+            param_labels_latex.append(r'dV [km s$^{-1}$]')
+        else:
+            param_labels_latex.append(label)
+
     plt.rcParams.update({
         "text.usetex": True,
         "font.family": "serif",
         "font.size": 12
     })
-    
+
     # Load the MCMC chain
     chain = np.load(chain_path)
-    
+
     # Remove burn-in (first 20% of steps)
     burn_in = int(0.2 * chain.shape[1])
     chain = chain[:, burn_in:, :]
-    
+
     # Reshape the chain to (nwalkers*nsteps, ndim)
     samples = chain.reshape((-1, chain.shape[-1]))
-    
+
     # Custom title formatter for corner plot
     def custom_title_formatter(param_index):
         mcmc = np.percentile(samples[:, param_index], [16, 50, 84])
@@ -74,11 +69,11 @@ def plot_results(chain_path, param_labels, velocity_components=1, include_trace=
         value = mcmc[1]
         lower = q[0]
         upper = q[1]
-        
+
         if abs(value) < 1e-3 or abs(value) > 1e3:
-            base_str = f"{value / 10**np.floor(np.log10(value)):.2f}"
-            lower_str = f"{lower / 10**np.floor(np.log10(value)):.2f}"
-            upper_str = f"{upper / 10**np.floor(np.log10(value)):.2f}"
+            base_str = f"{value / 10 ** np.floor(np.log10(value)):.2f}"
+            lower_str = f"{lower / 10 ** np.floor(np.log10(value)):.2f}"
+            upper_str = f"{upper / 10 ** np.floor(np.log10(value)):.2f}"
             exponent = int(np.floor(np.log10(value)))
             value_str = f"({base_str}_{{-{lower_str}}}^{{+{upper_str}}}) \\times 10^{{{exponent}}}"
         else:
@@ -86,17 +81,18 @@ def plot_results(chain_path, param_labels, velocity_components=1, include_trace=
             lower_str = f"{lower:.2f}"
             upper_str = f"{upper:.2f}"
             value_str = f"{value_str}^{{+{upper_str}}}_{{-{lower_str}}}"
-        
+
         return f"${value_str}$"
-    
+
     # Generate corner plot
-    fig = corner.corner(samples, labels=param_labels_latex, quantiles=[0.16, 0.5, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
+    fig = corner.corner(samples, labels=param_labels_latex, quantiles=[0.16, 0.5, 0.84],
+                        show_titles=True, title_kwargs={"fontsize": 12})
     axes = np.array(fig.axes).reshape((len(param_labels_latex), len(param_labels_latex)))
-    
+
     for i in range(len(param_labels_latex)):
         title = custom_title_formatter(i)
         axes[i, i].set_title(f"{param_labels_latex[i]}: {title}", fontsize=12)
-    
+
     fig.savefig(f"{chain_path[:-4]}_corner.png", dpi=600)
 
     # Generate trace plots
@@ -107,11 +103,11 @@ def plot_results(chain_path, param_labels, velocity_components=1, include_trace=
             axes = [axes]  # Make it iterable if only one parameter
         for i, ax in enumerate(axes):
             ax.plot(chain[:, :, i].T, color="k", alpha=0.3)
-            ax.set_title(f'Parameter {i+1}: {param_labels_latex[i]}')
+            ax.set_title(f'Parameter {i + 1}: {param_labels_latex[i]}')
             ax.set_xlabel("Step Number")
         plt.tight_layout()
         fig.savefig(f"{chain_path[:-4]}_trace.png")
-    
+
     # Generate table of parameter estimates and uncertainties
     table = []
     for i, label in enumerate(param_labels):
@@ -651,3 +647,105 @@ def apply_beam(frequency, intensity, source_size, dish_size):
     intensity_diluted *= dilution_factor
     
     return intensity_diluted
+
+# Older version of custom plotting function
+# def plot_results(chain_path, param_labels, velocity_components=1, include_trace=False):
+#     if velocity_components == 4:
+#         param_labels_latex = [
+#             r'Source Size$_1$ [$^{\prime\prime}$]', r'Source Size$_2$ [$^{\prime\prime}$]', 
+#             r'Source Size$_3$ [$^{\prime\prime}$]', r'Source Size$_4$ [$^{\prime\prime}$]', 
+#             r'N$_{\mathrm{col}_1}$ [cm$^{-2}$]', r'N$_{\mathrm{col}_2}$ [cm$^{-2}$]', 
+#             r'N$_{\mathrm{col}_3}$ [cm$^{-2}$]', r'N$_{\mathrm{col}_4}$ [cm$^{-2}$]', 
+#             r'T$_{\mathrm{ex}}$ [K]', r'v$_{\mathrm{lsr}_1}$ [km s$^{-1}$]', 
+#             r'v$_{\mathrm{lsr}_2}$ [km s$^{-1}$]', r'v$_{\mathrm{lsr}_3}$ [km s$^{-1}$]', 
+#             r'v$_{\mathrm{lsr}_4}$ [km s$^{-1}$]', r'dV [km s$^{-1}$]'
+#         ]
+#     elif velocity_components == 1:
+#         param_labels_latex = [
+#             r'Source Size [$^{\prime\prime}$]', r'N$_{\mathrm{col}}$ [cm$^{-2}$]', 
+#             r'T$_{\mathrm{ex}}$ [K]', r'v$_{\mathrm{lsr}}$ [km s$^{-1}$]', r'dV [km s$^{-1}$]'
+#         ]
+        
+#     else:
+#         print(f"{RED}Error: Parameter labels haven't been added for this number of velocity components.{RESET}")
+#         return
+    
+#     plt.rcParams.update({
+#         "text.usetex": True,
+#         "font.family": "serif",
+#         "font.size": 12
+#     })
+    
+#     # Load the MCMC chain
+#     chain = np.load(chain_path)
+    
+#     # Remove burn-in (first 20% of steps)
+#     burn_in = int(0.2 * chain.shape[1])
+#     chain = chain[:, burn_in:, :]
+    
+#     # Reshape the chain to (nwalkers*nsteps, ndim)
+#     samples = chain.reshape((-1, chain.shape[-1]))
+    
+#     # Custom title formatter for corner plot
+#     def custom_title_formatter(param_index):
+#         mcmc = np.percentile(samples[:, param_index], [16, 50, 84])
+#         q = np.diff(mcmc)
+#         value = mcmc[1]
+#         lower = q[0]
+#         upper = q[1]
+        
+#         if abs(value) < 1e-3 or abs(value) > 1e3:
+#             base_str = f"{value / 10**np.floor(np.log10(value)):.2f}"
+#             lower_str = f"{lower / 10**np.floor(np.log10(value)):.2f}"
+#             upper_str = f"{upper / 10**np.floor(np.log10(value)):.2f}"
+#             exponent = int(np.floor(np.log10(value)))
+#             value_str = f"({base_str}_{{-{lower_str}}}^{{+{upper_str}}}) \\times 10^{{{exponent}}}"
+#         else:
+#             value_str = f"{value:.2f}"
+#             lower_str = f"{lower:.2f}"
+#             upper_str = f"{upper:.2f}"
+#             value_str = f"{value_str}^{{+{upper_str}}}_{{-{lower_str}}}"
+        
+#         return f"${value_str}$"
+    
+#     # Generate corner plot
+#     fig = corner.corner(samples, labels=param_labels_latex, quantiles=[0.16, 0.5, 0.84], show_titles=True, title_kwargs={"fontsize": 12})
+#     axes = np.array(fig.axes).reshape((len(param_labels_latex), len(param_labels_latex)))
+    
+#     for i in range(len(param_labels_latex)):
+#         title = custom_title_formatter(i)
+#         axes[i, i].set_title(f"{param_labels_latex[i]}: {title}", fontsize=12)
+    
+#     fig.savefig(f"{chain_path[:-4]}_corner.png", dpi=600)
+
+#     # Generate trace plots
+#     if include_trace:
+#         n_params = len(param_labels)  # Number of parameters to plot
+#         fig, axes = plt.subplots(nrows=n_params, figsize=(10, 2 * n_params))
+#         if n_params == 1:
+#             axes = [axes]  # Make it iterable if only one parameter
+#         for i, ax in enumerate(axes):
+#             ax.plot(chain[:, :, i].T, color="k", alpha=0.3)
+#             ax.set_title(f'Parameter {i+1}: {param_labels_latex[i]}')
+#             ax.set_xlabel("Step Number")
+#         plt.tight_layout()
+#         fig.savefig(f"{chain_path[:-4]}_trace.png")
+    
+#     # Generate table of parameter estimates and uncertainties
+#     table = []
+#     for i, label in enumerate(param_labels):
+#         mcmc = np.percentile(samples[:, i], [16, 50, 84])
+#         q = np.diff(mcmc)
+#         if abs(mcmc[1]) < 1e-3 or abs(mcmc[1]) > 1e3:
+#             median = f"{mcmc[1]:.2e}"
+#             lower = f"{q[0]:.2e}"
+#             upper = f"{q[1]:.2e}"
+#         else:
+#             median = f"{mcmc[1]:.5f}"
+#             lower = f"{q[0]:.5f}"
+#             upper = f"{q[1]:.5f}"
+#         table.append([label, median, lower, upper])
+
+#     headers = ["Parameter", "Median Estimate", "Lower Uncertainty", "Upper Uncertainty"]
+#     colalign = ["center"] * len(headers)
+#     print("\n" + tabulate(table, headers=headers, tablefmt="grid", colalign=colalign) + "\n")
