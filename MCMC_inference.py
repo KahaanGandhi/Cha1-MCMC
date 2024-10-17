@@ -120,6 +120,7 @@ class SpectralFitMCMC:
         yerrs = datagrid[2]
         line_indices = datagrid[3]
 
+        # Unpack model parameters
         if self.source_size is not None:
             Ncol, Tex, vlsr, dV = theta
             source_size = self.source_size
@@ -142,6 +143,7 @@ class SpectralFitMCMC:
 
         return -0.5 * tot_lnlike
 
+    # Check if a set of model parameters falls within priors
     def is_within_bounds(self, theta):
         if self.source_size is not None:
             Ncol, Tex, vlsr, dV = theta
@@ -421,13 +423,13 @@ if __name__ == "__main__":
     config = {
         # Frequently adjusted for specific MCMC runs
         'mol_name':          'hc5n_hfs',    # Molecule name, as named in CDMS_catalog
-        'template_run':      False,         # True for template species; hardcoded initial positions for first run
+        'template_run':      True,          # True for template species; hardcoded initial positions for first run
         'nruns':             10000,         # MCMC iterations; higher values improve convergence
         'nwalkers':          128,           # Number of walkers; more walkers explore parameter space better
 
         # Physical priors (e.g. positivity constraints and limits)
         'bounds': {
-            'source_size':   [30.0, 90.0],           # Source size in arcseconds
+            'source_size':   [30.0, 90.0],             # Source size in arcseconds
             'Ncol':          [10 ** 8.0, 10 ** 14.0],  # Column density (cm⁻²)
             'Tex':           [3.4, 12.0],              # Excitation temperature (K), avoid values below CMB (2.7 K)
             'vlsr':          [3.0, 5.5],               # Source velocity (km/s); for multiple sources, force sequential ordering
@@ -444,7 +446,7 @@ if __name__ == "__main__":
         'lower_limit':       18000,         # Lower frequency limit (MHz)
         'upper_limit':       25000,         # Upper frequency limit (MHz)
         'aligned_velocity':  4.33,          # Velocity for spectral alignment (km/s)
-        'fixed_source_size': 52.0,          # Set to a numerical value to fix source size (4 free parameters), None or False for 5 free parameters
+        'fixed_source_size': None,          # Set to a numerical value to fix source size (4 free parameters), None or False for 5 free parameters
 
         # Usually unchanged unless paths or setup are modified
         'block_interlopers': True,          # Recommended True to block interloping lines
