@@ -10,4 +10,5 @@ k   = 1.381 * 10**(-23)  # Boltzmann's constant in J/K
 CYAN  = "\033[36m"
 GRAY  = "\033[90m"
 RED   = "\033[31m"
+GREEN = "\033[92m"
 RESET = "\033[0m"

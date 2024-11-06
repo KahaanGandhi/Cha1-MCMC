@@ -93,6 +93,7 @@ def plot_results(chain_path, param_labels, include_trace=False):
         title = custom_title_formatter(i)
         axes[i, i].set_title(f"{param_labels_latex[i]}: {title}", fontsize=12)
 
+    print(f"\n{GRAY}Saving corner plot to {chain_path[:-4]}_corner.png{RESET}")
     fig.savefig(f"{chain_path[:-4]}_corner.png", dpi=600)
 
     # Generate trace plots
@@ -256,7 +257,7 @@ def calc_q(catalog, T):
         Q = 25.896*T**1.4998 + 0.38109
 
         if T > 60:
-            print('Warning: Extrapolating Q beyond 60 K for this molecule gets progressively iffier.')
+            print(f'{GRAY}Extrapolating Q beyond 60 K for this molecule gets progressively iffier. Requested T: {T} K.{RESET}')
 
 
     else:

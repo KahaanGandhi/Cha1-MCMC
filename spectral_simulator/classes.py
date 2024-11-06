@@ -15,6 +15,7 @@ from spectral_simulator.functions import *
 
 class MolCat(object):
 
+	# Note: temperature here as default of 300 K, used when calculating partition function
 	def __init__(self, name, catalog_file, format='spcat', CT=300):
 		self.name = name
 		self.catalog_file = catalog_file
