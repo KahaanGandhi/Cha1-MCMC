@@ -14,6 +14,7 @@
 
 import emcee
 import os
+import corner
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize as opt
@@ -21,7 +22,6 @@ import scipy.optimize as opt
 from multiprocessing import Pool
 from numba import njit
 from tqdm import tqdm
-import corner
 from tabulate import tabulate
 
 from spectral_simulator.classes import *
@@ -343,9 +343,6 @@ class SpectralFitMCMC:
 
     # Estimate Ncol via Maximum Likelihood Estimation (MLE), holding other parameters fixed
     def estimate_Ncol_via_MLE(self, datagrid, mol_cat, fixed_params):
-        """
-        Estimate Ncol via Maximum Likelihood Estimation, holding other parameters fixed.
-        """
         # Unpack fixed parameters
         if self.source_size is not None:
             Tex, vlsr, dV = fixed_params
