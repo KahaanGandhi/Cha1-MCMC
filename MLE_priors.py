@@ -81,7 +81,7 @@ class SpectralFitMCMC:
         self.parallelize       = self.config['parallelize']
         self.fixed_source_size = self.config['fixed_source_size']
         self.bounds            = self.config['bounds']
-        self.initialize_Ncol_via_MLE = self.config.get('initialize_Ncol_via_MLE', False)
+        self.MLE_for_Ncol      = self.config.get('MLE_for_Ncol', False)
 
         # Adjust parameter labels and dimensions based on whether source size is fixed or not
         if isinstance(self.fixed_source_size, (float, int)):
@@ -303,7 +303,7 @@ class SpectralFitMCMC:
         return relevant_freqs, relevant_intensity, relevant_yerrs, covered_trans
 
     def init_setup(self):
-        print(f"\n{CYAN}Running setup for: {self.mol_name}, block interlopers = {self.block_interlopers}.{RESET}")
+        print(f"\n{CYAN}Reducing spectral data for {self.mol_name}.{RESET}")
         catfile_path = os.path.join(self.cat_folder, f"{self.mol_name}.cat")
 
         try:
@@ -327,7 +327,7 @@ class SpectralFitMCMC:
         int_sim = np.array(sim.int_sim)
 
         # Read and process spectral data
-        print(f"{CYAN}Reading in spectral data from: {self.data_path}{RESET}")
+        print(f"{GRAY}Reading in spectral data from: {self.data_path}{RESET}")
         freqs_DSN, ints_DSN, yerrs_DSN, covered_trans_DSN = self.read_file(self.data_path, freq_sim, int_sim,
                                                                             block_interlopers=self.block_interlopers,
                                                                             plot=False)
@@ -336,7 +336,7 @@ class SpectralFitMCMC:
         # Assemble data grid for MCMC fitting
         datagrid = np.array([freqs_DSN, ints_DSN, yerrs_DSN, covered_trans_DSN], dtype=object)
         datafile_path = os.path.join(self.fit_folder, self.mol_name, "all_" + self.mol_name + "_lines_DSN_freq_space.npy")
-        print(f"\n{CYAN}Saving reduced spectrum to: {datafile_path}{RESET}")
+        print(f"{GRAY}Saving reduced spectrum to: {datafile_path}{RESET}\n")
         np.save(datafile_path, datagrid, allow_pickle=True)
 
         return datafile_path, catfile_path
@@ -358,16 +358,15 @@ class SpectralFitMCMC:
                 theta = [source_size, Ncol, Tex, vlsr, dV]
             return -self.lnlike(theta, datagrid, mol_cat)
 
-        # Set initial guess and bounds for Ncol
         # Ncol_initial = 1e12  # Starting value for Ncol
-        Ncol_bounds = (self.bounds['Ncol'][0], self.bounds['Ncol'][1])  # Use bounds from config
+        Ncol_bounds = (self.bounds['Ncol'][0], self.bounds['Ncol'][1])
 
         # Use minimize_scalar to find the Ncol that minimizes the negative log-likelihood
         try:
             result = opt.minimize_scalar(nll, bounds=Ncol_bounds, method='bounded', options={'xatol':1e-6})
             if result.success:
                 estimated_Ncol = result.x
-                print(f"{GREEN}MLE for Ncol successful. Estimated Ncol: {estimated_Ncol:.3e}{RESET}")
+                print(f"{GREEN}Succesful MLE fit for column density. Prior Ncol: {estimated_Ncol:.3e}{RESET}")
                 return estimated_Ncol
             else:
                 print(f"{RED}MLE for Ncol failed to converge.{RESET}")
@@ -378,7 +377,7 @@ class SpectralFitMCMC:
 
     # Conduct Markov Chain Monte Carlo (MCMC) inference using emcee's ensemble sampler
     def fit_multi_gaussian(self, datafile, catalogue):
-        print(f"{CYAN}Fitting column densities for {self.mol_name}.{RESET}")
+        print(f"{CYAN}Estimating free parameters for {self.mol_name}.{RESET}")
         ndim = self.ndim
         if not os.path.exists(datafile):
             raise FileNotFoundError(f"{RED}The data file {datafile} could not be found.{RESET}")
@@ -400,7 +399,7 @@ class SpectralFitMCMC:
             print(f"{GRAY}Loading previous chain data from: {self.prior_path}{RESET}")
 
             psamples = np.load(self.prior_path).T
-            print(f"Dimensions of samples loaded from chain: {psamples.shape}")
+            print(f"{GRAY}Dimensions of samples loaded from chain: {psamples.shape}{RESET}")
 
             # Compute prior means and standard deviations
             prior_means = np.mean(np.percentile(psamples, 50, axis=1), axis=1)
@@ -428,7 +427,7 @@ class SpectralFitMCMC:
             file_name = os.path.join(self.fit_folder, self.mol_name, "chain.npy")
 
         # MLE for column density initialization
-        if self.initialize_Ncol_via_MLE:
+        if self.MLE_for_Ncol:
             print(f"{GRAY}Initializing Ncol via MLE.{RESET}")
             # Fixed parameters: Tex, vlsr, dV, (source_size if applicable)
             if self.source_size is not None:
@@ -492,7 +491,6 @@ class SpectralFitMCMC:
             chain_path = os.path.join(self.fit_folder, self.mol_name, "chain.npy")
 
         if os.path.exists(chain_path):
-            # Call the custom plotting function
             plot_results(chain_path, self.param_labels, self.param_labels_latex, include_trace=False)
         else:
             print(f"{RED}Chain file not found at {chain_path}. Exiting.{RESET}")
@@ -516,7 +514,6 @@ def plot_results(chain_path, param_labels, param_labels_latex, include_trace=Fal
     samples = chain.reshape((-1, chain.shape[-1]))
     ndim = samples.shape[1]
 
-    # Ensure that param_labels and param_labels_latex match ndim
     if len(param_labels) != ndim:
         print(f"{RED}Mismatch in number of parameters: param_labels has {len(param_labels)}, but chain has {ndim}.{RESET}")
         param_labels = param_labels[:ndim]
@@ -555,9 +552,10 @@ def plot_results(chain_path, param_labels, param_labels_latex, include_trace=Fal
         title = custom_title_formatter(i)
         axes[i, i].set_title(f"{param_labels_latex[i]}: {title}", fontsize=12)
 
+    # TODO: comment out this line eventually
     print(f"\n{GRAY}Saving corner plot to {chain_path[:-4]}_corner.png{RESET}")
     fig.savefig(f"{chain_path[:-4]}_corner.png", dpi=600)
-    plt.show()
+    # plt.show()
 
     # Generate trace plots
     if include_trace:
@@ -595,53 +593,54 @@ if __name__ == "__main__":
 
     config = {
         # Frequently adjusted for specific MCMC runs
-        'mol_name':          'benzonitrile',      # Molecule name, as named in CDMS_catalog
-        'template_run':      True,           # False for non-template species
-        'nruns':             10000,           # MCMC iterations; higher values improve convergence
+        'mol_name':          'hc5n_hfs',      # Molecule name, as named in CDMS_catalog
+        'template_run':      False,            # False for non-template species
+        'nruns':             10000,           # MCMC iterations; higher values can improve convergence
         'nwalkers':          128,             # Number of walkers; more walkers explore parameter space better
 
         # Physical priors (e.g., positivity constraints and limits)
         'bounds': {
-            'source_size':   [30.0, 90.0],             # Source size in arcseconds
-            'Ncol':          [1e8, 1e14],              # Column density (cm⁻²)
-            'Tex':           [3.5, 12.0],              # Excitation temperature (K), avoid values below CMB (2.7 K)
-            'vlsr':          [3.0, 5.5],               # Source velocity (km/s)
-            'dV':            [0.4, 1.5],               # Line width (km/s)
+            'source_size':   [30.0, 90.0],    # Source size in arcseconds
+            'Ncol':          [1e8, 1e14],     # Column density (cm⁻²)
+            'Tex':           [3.5, 12.0],     # Excitation temperature (K), avoid values below CMB (2.7 K)
+            'vlsr':          [3.0, 5.5],      # Source velocity (km/s)
+            'dV':            [0.4, 1.5],      # Line width (km/s)
         },
 
-        # Priors for means (μ) and standard deviations (σ)
-        # For non-template run, these are loaded from the prior chain
-        'template_means':    np.array([46.91, 3.4e10, 8.0, 4.3, 0.7575]),  # Should match number of parameters
-        'template_stds':     np.array([6.5, 0.34e10, 3.0, 0.06, 0.22]),    # Should match number of parameters
+        # Priors for means (μ) and standard deviations (σ), loaded from prior chain for non-template run
+        'template_means':    np.array([46.91, 3.4e10, 8.0, 4.3, 0.7575]),
+        'template_stds':     np.array([6.5, 0.34e10, 3.0, 0.06, 0.22]),
 
         # Observation-specific settings for spectra
         'dish_size':         70,            # Telescope dish diameter (m)
         'lower_limit':       18000,         # Lower frequency limit (MHz)
         'upper_limit':       25000,         # Upper frequency limit (MHz)
-        'aligned_velocity':  4.33,          # Velocity for spectral alignment (km/s)
-        'fixed_source_size': 43,          # Set to a numerical value to fix source size (4 free parameters), None or False for 5 free parameters
+        'aligned_velocity':  4.10,          # Velocity for spectral alignment (km/s)
+        'fixed_source_size': 52.0,          # Set to a numerical value to fix source size (4 free parameters), None or False for 5 free parameters
 
         # MLE initialization option
-        'initialize_Ncol_via_MLE': True,    # Set to True to enable MLE for Ncol
+        'MLE_for_Ncol':      True,    # Set to True to enable MLE for Ncol
 
         # Usually unchanged unless paths or setup are modified
         'block_interlopers': True,          # Recommended True to block interloping lines
         'parallelize':       True,          # True for multiprocessing (faster); False for easier debugging
-        'fit_folder':        os.path.join(os.getcwd(), 'DSN_fit_results'),
+        'fit_folder':        os.path.join(os.getcwd(), 'MLE_DSN_fit_results'),
         'cat_folder':        os.path.join(os.getcwd(), 'CDMS_catalog'),
-        'prior_path':        os.path.join(os.getcwd(), 'DSN_fit_results', 'hc5n_hfs', 'chain_template.npy'),
+        'prior_path':        os.path.join(os.getcwd(), 'MLE_DSN_fit_results', 'hc5n_hfs', 'chain_template.npy'),
         'data_paths': {
-            'hc5n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc5n_example.npy'),
-            'hc7n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc7n_example.npy'),
+            # 'hc5n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_c2_hc5n_rereduced.npy'),
+            'hc5n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc5n_rereduced.npy'),
             'benzonitrile':  os.path.join(os.getcwd(), 'DSN_data', 'cha-c2-benzo.npy'),
+            # 'hc5n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc5n_example.npy'),
+            # 'hc7n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc7n_example.npy'),
+            # 'hc5n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_c2_hc5n_example.npy'),
+            # 'hc7n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_c2_hc7n_example.npy'),
             # Add more paths here...
         },
     }
 
-    # TODO: add a self.base_dir
-    # Adjust template means and stds if fixed_source_size is specified
+    # If source size is fixed, remove it from priors
     if isinstance(config['fixed_source_size'], (float, int)):
-        # Remove source_size from template_means and template_stds
         config['template_means'] = config['template_means'][1:]
         config['template_stds'] = config['template_stds'][1:]
 

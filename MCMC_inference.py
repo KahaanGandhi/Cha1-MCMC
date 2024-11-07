@@ -380,7 +380,9 @@ class SpectralFitMCMC:
             perturbation = np.array([1.e-1, 0.1 * prior_means[1], 1.e-3, 1.e-3, 1.e-3])
         pos = [initial + perturbation * np.random.randn(ndim) for _ in range(self.nwalkers)]
         print()
-
+        
+        # exit()
+    
         # Perform affine invariant MCMC sampling
         if self.parallelize:
             with Pool() as pool:
@@ -423,8 +425,8 @@ if __name__ == "__main__":
     config = {
         # Frequently adjusted for specific MCMC runs
         'mol_name':          'hc5n_hfs',    # Molecule name, as named in CDMS_catalog
-        'template_run':      True,          # True for template species; hardcoded initial positions for first run
-        'nruns':             10000,         # MCMC iterations; higher values improve convergence
+        'template_run':      False,          # True for template species; hardcoded initial positions for first run
+        'nruns':             4000,         # MCMC iterations; higher values improve convergence
         'nwalkers':          128,           # Number of walkers; more walkers explore parameter space better
 
         # Physical priors (e.g. positivity constraints and limits)
@@ -446,7 +448,7 @@ if __name__ == "__main__":
         'lower_limit':       18000,         # Lower frequency limit (MHz)
         'upper_limit':       25000,         # Upper frequency limit (MHz)
         'aligned_velocity':  4.33,          # Velocity for spectral alignment (km/s)
-        'fixed_source_size': None,          # Set to a numerical value to fix source size (4 free parameters), None or False for 5 free parameters
+        'fixed_source_size': 43,          # Set to a numerical value to fix source size (4 free parameters), None or False for 5 free parameters
 
         # Usually unchanged unless paths or setup are modified
         'block_interlopers': True,          # Recommended True to block interloping lines
@@ -457,6 +459,9 @@ if __name__ == "__main__":
         'data_paths': {
             'hc5n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc5n_example.npy'),
             'hc7n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc7n_example.npy'),
+            'benzonitrile':  os.path.join(os.getcwd(), 'DSN_data', 'cha-c2-benzo.npy'),
+            # 'hc5n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_c2_hc5n_example.npy'),
+            # 'hc7n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_c2_hc7n_example.npy'),
             # Add more paths here...
         },
     }
