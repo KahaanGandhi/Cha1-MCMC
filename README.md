@@ -2,13 +2,13 @@ Spectroscopic observations enable studies of the chemical composition of star-fo
 
 ## Installation Instructions
 
-Ensure you have [Conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) installed on your machine before proceeding. First, clone this repository to your local machine:
+First, clone this repository to your local machine:
 
 ```bash
 git clone https://github.com/KahaanGandhi/Cha1-MCMC.git
 cd Cha1-MCMC
 ```
-Create and activate a new Conda environment:
+Create and activate a new [Conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) environment:
 
 ```bash
 conda create --name cha1-mcmc-env python=3.9
