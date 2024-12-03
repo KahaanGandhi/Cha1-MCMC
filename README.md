@@ -20,45 +20,43 @@ Install the dependencies listed in the requirements.txt file:
 ```bash
 pip install -r requirements.txt
 ```
-If you encounter any issues with specific packages that aren't available, install them manually:
-```bash
-conda install <package-name>
-```
 
 ## Running Instructions
 
 ### Step 1: Preparing the Data
 
-- Verify your data is in the correct `.npy` format, containing frequency and intensity arrays for the molecule of interest. Refer to `DSN_pipeline.ipynb`  for guidance on reformatting common file formats.
-- Add your data to the `data_paths` section of the configuration in `MCMC_inference.py`, following the format:
+- Verify your data is in the correct `.npy` format, containing frequency and intensity arrays for the molecule of interest. Refer to `notebooks/DSN_pipeline.ipynb`  for guidance on reformatting common file formats.
+- Add your data to `data_paths` in `inference.py`, following the format:
 ```python
 'molecule_name': os.path.join(os.getcwd(), 'your_data_folder', 'your_data_file.npy'),
 ```
 
 ### Step 2: Configuring the MCMC Run
 
-- Open the `MCMC_inference.py` file and locate the `config` dictionary at the bottom of the script.
-- Adjust parameters like `dish_size`, `lower_limit`, and `upper_limit` to match your telescope and observations. The configuration is currently set up for DSS-43 observations of Chamaeleon I, and should be adjusted accordingly for different telescopes or sources. Verify that your molecule of interest has rotational transitions that fall within the specified frequency range.
-- Select between fixed or variable source size. Since source size is highly covariant with column density, fixing it can help better constrain column density when it can be estimated through other means. If unknown, source size will be treated as a fifth free parameter.
-- You can also increase `nwalkers` or `nruns` to explore more of the parameter space during MCMC sampling.
+- Open the `inference.py` file and locate the `config` dictionary at the bottom of the script.
+- **Observation parameters**: Adjust parameters like `dish_size`, `lower_limit`, and `upper_limit` to match your telescope and source. Ensure that your molecule has rotational transitions that fall in the specified frequency range. The current configuration is for DSS-43 observations of Chamaeleon I. 
+- **Source size and column density**:
+  - Source size is highly covariant with column density; in cases where source size can be estimated through other means, fixing it can better constrain column density. If unknown, it will be treated as a free parameter.
+  - Column density is initialized via Maximum Likelihood Estimation (MLE) by default, supporting both fixed and variable source sizes.
+- **Exploring sample space**: Increase `nwalkers` for broader exploration, especially if the parameter space is large or multimodal (e.g., multiple solutions). Increase `nruns` (number of MCMC steps) to improve convergence and precision. As a rule of thumb, more walkers help with complex models, while more steps refine results in well-defined spaces. Look for signs like poor convergence or incomplete exploration to decide which to adjust.
 
 ### Step 3: Running the Initial MCMC
 
-- For your initial run, set ```template_run``` to ```True``` to use hardcoded initial values specific to the template species.
-- Cyanopolyynes like HC<sub>5</sub>N tend to share source properties, so it is recommended to first obtain a fit for shorter linear molecules, as their transitions are more easily detectable above noise levels.
+- For your first run, set ```template_run``` to ```True``` to use hardcoded initial values specific to the template species.
+- Cyanopolyynes tend to share source properties, so it is recommended to first obtain a fit for shorter linear molecules, as their transitions are more easily detectable above noise levels.
 - Run the script from the main directory:
 ```bash
 cd /path/to/Cha1-MCMC
-python MCMC_inference.py
+python inference.py
 ```
 
 ### Step 4: Refining the Fit
 
-- After the initial run, set `template_run` to `False` to load priors from the previous run into the analysis.
-- You can rerun the script to refine the fit:
+- After the initial run, set `template_run` to `False` to load posteriors from the previous run as priors
+- Rerun the script to refine the fit:
 ```bash
-python MCMC_inference.py
+python inference.py
 ```
-- If desired, you can redo the template run (perhaps with more walkers or steps for a more thorough exploration of the parameter space), which will overwrite the previous template run results.
+- If desired, you can redo the template run, which will overwrite the previous template run results.
 
 If you have any questions or feedback, feel free to reach out via email at [kahaan@gmail.com](mailto:kahaan@gmail.com). A BibTeX citation will be included alongside a forthcoming publication; please cite the software if you found it helpful with your work.
