@@ -1,12 +1,11 @@
-#------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------
 # Developer: Kahaan Gandhi
 # MCMC inference to fit spectral models to observed data, based on methods in:
 # Loomis, R.A. et al., Nat Astron 5, 188–196 (2021), DOI: 10.1038/s41550-020-01261-4.
 #
-# Source size is highly covariant with column density; in cases where source size can 
-# be estimated through other means, fixing it can better constrain column density. 
-# Allows for customizable MCMC sampling and observational parameters (see main function).
-#------------------------------------------------------------------------------------------
+# This script is fully functional but does not support MLE initialization of column density.
+# To run this older version, move it into the main folder of the repository.
+#--------------------------------------------------------------------------------------------
 
 import emcee
 import os

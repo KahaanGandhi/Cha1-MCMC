@@ -552,7 +552,6 @@ def plot_results(chain_path, param_labels, param_labels_latex, include_trace=Fal
         title = custom_title_formatter(i)
         axes[i, i].set_title(f"{param_labels_latex[i]}: {title}", fontsize=12)
 
-    # TODO: comment out this line eventually
     print(f"\n{GRAY}Saving corner plot to {chain_path[:-4]}_corner.png{RESET}")
     fig.savefig(f"{chain_path[:-4]}_corner.png", dpi=600)
     # plt.show()
