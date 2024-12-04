@@ -57,5 +57,6 @@ python inference.py
 ```
 - You can redo the template run if needed; this will overwrite the previous results.
 - Once satisfied, set `prior_path` to the saved location to use it for future non-template runs. You can keep multiple template runs, so check that `prior_path` points to the correct chain for each case.
+- To plot the best-fit model against observed spectra and extract peak model intensities of each rotational transition, refer to `notebooks/DSN_spectra.ipynb`.
 
 If you have any questions or feedback, feel free to reach out via email at [kahaan@gmail.com](mailto:kahaan@gmail.com). A BibTeX citation will be included alongside a forthcoming publication; please cite the software if you found it helpful with your work.
