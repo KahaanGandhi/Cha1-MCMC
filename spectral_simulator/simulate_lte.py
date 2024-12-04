@@ -2,7 +2,6 @@
 # Based on the script available at:
 # McGuire, B.A., https://github.com/bmcguir2/simulate_lte
 # 
-# This script is a reference copy, with no additional changes made.
 # Although the spectral simulator in Loomis et al. (2021) is a lightweight version 
 # of this script, utilizing the same functions and classes, the full version is 
 # occasionally useful for reference due to its comprehensive documentation.

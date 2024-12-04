@@ -21,7 +21,7 @@ pip install -r requirements.txt
 
 ## Running Instructions
 
-### Step 1: Preparing the Data
+### Step 1: Data Preparation 
 
 - Verify your data is in the correct `.npy` format, containing frequency and intensity arrays for the molecule of interest. To reformat common file formats, refer to `notebooks/DSN_pipeline.ipynb`.
 - Add your data to `data_paths` in `inference.py`, following the format:
@@ -29,7 +29,7 @@ pip install -r requirements.txt
 'molecule_name': os.path.join(os.getcwd(), 'your_data_folder', 'your_data_file.npy'),
 ```
 
-### Step 2: Configuring the MCMC Run
+### Step 2: Parameter Configuration
 
 - Open the `inference.py` file and locate the `config` dictionary at the bottom of the script.
 - **Observation parameters**: Adjust parameters like `dish_size`, `lower_limit`, and `upper_limit` to match your telescope and source. Ensure that your molecule has rotational transitions that fall in the specified frequency range. The current configuration is for DSS-43 observations of Chamaeleon I. 
@@ -38,7 +38,7 @@ pip install -r requirements.txt
   - Column density is initialized via Maximum Likelihood Estimation (MLE) by default, supporting both fixed and variable source sizes.
 - **Exploring sample space**: Increase `nwalkers` for broader exploration, especially if the parameter space is large or multimodal. Increase `nruns` (number of MCMC steps) to improve convergence and precision. As a rule of thumb, more walkers help with complex models, while more steps refine results in well-defined spaces. Look for signs like poor convergence or incomplete exploration to decide which to adjust.
 
-### Step 3: Running the Initial MCMC
+### Step 3: Initial MCMC Sampling
 
 - For your first run, set ```template_run``` to ```True``` to use hardcoded initial values specific to the template species.
 - Cyanopolyynes tend to share source properties, so it is recommended to first obtain a fit for shorter linear molecules, as their transitions are more easily detectable above noise levels.
