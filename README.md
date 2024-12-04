@@ -5,8 +5,8 @@ Spectroscopic observations enable studies of the chemical composition of star-fo
 First, clone this repository to your local machine:
 
 ```bash
-git clone https://github.com/KahaanGandhi/Cha1-MCMC.git
-cd Cha1-MCMC
+git clone https://github.com/KahaanGandhi/Chamaeleon-MCMC.git
+cd Chamaeleon-MCMC
 ```
 Create and activate a new [Conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) environment:
 
@@ -44,7 +44,7 @@ pip install -r requirements.txt
 - Cyanopolyynes tend to share source properties, so it is recommended to first obtain a fit for shorter linear molecules, as their transitions are more easily detectable above noise levels.
 - Run the script from the main directory:
 ```bash
-cd /path/to/Cha1-MCMC
+cd /path/to/Chamaeleon-MCMC
 python inference.py
 ```
 
