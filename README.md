@@ -11,8 +11,8 @@ cd Cha1-MCMC
 Create and activate a new [Conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) environment:
 
 ```bash
-conda create --name cha1-mcmc-env python=3.9
-conda activate cha1-mcmc-env
+conda create --name mcmc-env python=3.9
+conda activate mcmc-env
 ```
 Install the dependencies listed in the requirements.txt file:
 ```bash
