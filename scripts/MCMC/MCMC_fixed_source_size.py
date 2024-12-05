@@ -1,9 +1,11 @@
-#------------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------------
 # Developer: Kahaan Gandhi
 # Script for spectral simulation and MCMC inference with customizable parameters.
 # This functionality has been combined into the main MCMC script.
 # To run this older version, move it into the main folder of the repository.
-#-----------------------------------------------------------------------------------------
+
+# Note: This script is outdated and may require updates to align with recent repository changes.
+# -----------------------------------------------------------------------------------------------
 
 import emcee
 import os

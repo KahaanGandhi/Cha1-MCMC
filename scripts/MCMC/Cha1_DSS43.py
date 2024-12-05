@@ -1,10 +1,12 @@
-#-----------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------------
 # Developer: Kahaan Gandhi
 # Based on methodologies described in:
 # Loomis, R.A. et al., Nat Astron 5, 188–196 (2021), DOI: 10.1038/s41550-020-01261-4
 # This script was developed into a more generalized MCMC inference class.
 # This version uses JIT compilation for hardcoded DSS-43 values.
-#-----------------------------------------------------------------------------------
+
+# Note: This script is outdated and may require updates to align with recent repository changes.
+# -----------------------------------------------------------------------------------------------
 
 import emcee
 import os

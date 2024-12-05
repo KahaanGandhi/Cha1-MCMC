@@ -3,6 +3,8 @@
 # Performs MCMC inference with a fixed source size. Four free parameters: Ncol, Tex, vlsr, dV.
 # This functionality has been combined into the main MCMC script.
 # To run this older version, move it into the main folder of the repository.
+
+# Note: This script is outdated and may require updates to align with recent repository changes.
 #---------------------------------------------------------------------------------------------------
 
 import emcee

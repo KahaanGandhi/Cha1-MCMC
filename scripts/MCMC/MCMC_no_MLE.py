@@ -1,11 +1,12 @@
-#--------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------
 # Developer: Kahaan Gandhi
 # MCMC inference to fit spectral models to observed data, based on methods in:
 # Loomis, R.A. et al., Nat Astron 5, 188–196 (2021), DOI: 10.1038/s41550-020-01261-4.
-#
-# This script is fully functional but does not support MLE initialization of column density.
+# This script avoids MLE initialization of column density.
 # To run this older version, move it into the main folder of the repository.
-#--------------------------------------------------------------------------------------------
+
+# Note: This script is outdated and may require updates to align with recent repository changes.
+#---------------------------------------------------------------------------------------------------
 
 import emcee
 import os
