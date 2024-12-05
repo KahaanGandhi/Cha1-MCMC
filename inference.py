@@ -459,7 +459,8 @@ class SpectralFitMCMC:
         pos = np.array(pos)
 
         print(f"{GRAY}Failed walker initalizations: {self.nwalkers - count}{RESET}\n")
-
+        # exit()
+        
         # Perform affine invariant MCMC sampling
         if self.parallelize:
             with Pool() as pool:
@@ -627,13 +628,13 @@ if __name__ == "__main__":
         'cat_folder':        os.path.join(os.getcwd(), 'CDMS_catalog'),
         'prior_path':        os.path.join(os.getcwd(), 'MLE_DSN_fit_results', 'hc5n_hfs', 'chain_template.npy'),
         'data_paths': {
-            # 'hc5n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_c2_hc5n_rereduced.npy'),
-            'hc5n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc5n_rereduced.npy'),
-            'benzonitrile':  os.path.join(os.getcwd(), 'DSN_data', 'cha-c2-benzo.npy'),
-            # 'hc5n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc5n_example.npy'),
-            # 'hc7n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_mms1_hc7n_example.npy'),
-            # 'hc5n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_c2_hc5n_example.npy'),
-            # 'hc7n_hfs':      os.path.join(os.getcwd(), 'DSN_data', 'cha_c2_hc7n_example.npy'),
+            # 'hc5n_hfs':      os.path.join(os.getcwd(), 'data', 'DSN', 'cha_c2_hc5n_rereduced.npy'),
+            'hc5n_hfs':      os.path.join(os.getcwd(), 'data', 'DSN', 'cha_mms1_hc5n_rereduced.npy'),
+            'benzonitrile':  os.path.join(os.getcwd(), 'data', 'DSN', 'cha-c2-benzo.npy'),
+            # 'hc5n_hfs':      os.path.join(os.getcwd(), 'data', 'DSN', 'cha_mms1_hc5n_example.npy'),
+            # 'hc7n_hfs':      os.path.join(os.getcwd(), 'data', 'DSN', 'cha_mms1_hc7n_example.npy'),
+            # 'hc5n_hfs':      os.path.join(os.getcwd(), 'data', 'DSN', 'cha_c2_hc5n_example.npy'),
+            # 'hc7n_hfs':      os.path.join(os.getcwd(), 'data', 'DSN', 'cha_c2_hc7n_example.npy'),
             # Add more paths here...
         },
     }
