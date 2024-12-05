@@ -1,5 +1,13 @@
 Spectroscopic observations enable studies of the chemical composition of star-forming regions based on their distinct molecular emission and absorption spectra. The difficulty of detecting complex organic molecules, which probe chemical complexity, scales with their size — emission from heavy molecules is distributed over many lines, often too weak to detect individually. To address this, MCMC algorithms fit spectral models to sparse spectra, enabling molecular detection through multi-transition radio observations.
 
+Contents include:
+- `inference.py`: Main MCMC script; follow instructions below to run it.
+- `notebooks/`: Preprocessing and postprocessing workflows.
+- `scripts/`: Reference implementations of MCMC sampling.
+- `spectral_simulator/`: Fast LTE spectral modeling tools.
+- `catalog/`: Subset of CDMS catalog for relavent molecules.
+- `data/`: Sample data, which can be used as a template for adding your own.
+
 ## Installation Instructions
 
 First, clone this repository to your local machine:
