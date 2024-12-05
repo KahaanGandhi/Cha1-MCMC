@@ -593,8 +593,8 @@ if __name__ == "__main__":
 
     config = {
         # Frequently adjusted for specific MCMC runs
-        'mol_name':          'hc5n_hfs',      # Molecule name, as named in CDMS_catalog
-        'template_run':      False,            # False for non-template species
+        'mol_name':          'hc5n_hfs',      # Molecule name, as named in CDMS catalog
+        'template_run':      True,            # False for non-template species
         'nruns':             10000,           # MCMC iterations; higher values can improve convergence
         'nwalkers':          128,             # Number of walkers; more walkers explore parameter space better
 
@@ -607,7 +607,7 @@ if __name__ == "__main__":
             'dV':            [0.4, 1.5],      # Line width (km/s)
         },
 
-        # Priors for means (μ) and standard deviations (σ), loaded from prior chain for non-template run
+        # Priors for means and standard deviations, loaded from prior chain for non-template run
         'template_means':    np.array([46.91, 3.4e10, 8.0, 4.3, 0.7575]),
         'template_stds':     np.array([6.5, 0.34e10, 3.0, 0.06, 0.22]),
 
@@ -616,10 +616,10 @@ if __name__ == "__main__":
         'lower_limit':       18000,         # Lower frequency limit (MHz)
         'upper_limit':       25000,         # Upper frequency limit (MHz)
         'aligned_velocity':  4.10,          # Velocity for spectral alignment (km/s)
-        'fixed_source_size': 52.0,          # Set to a numerical value to fix source size (4 free parameters), None or False for 5 free parameters
+        'fixed_source_size': 52.0,          # Set to a numerical value to fix source size (4 free parameters), None for 5 free parameters
 
         # MLE initialization option
-        'MLE_for_Ncol':      True,    # Set to True to enable MLE for Ncol
+        'MLE_for_Ncol':      True,          # True for MLE initalization for Ncol; False for template prior
 
         # Usually unchanged unless paths or setup are modified
         'block_interlopers': True,          # Recommended True to block interloping lines
