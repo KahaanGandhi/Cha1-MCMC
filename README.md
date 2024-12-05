@@ -3,7 +3,6 @@
   <img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python Version">
   <img src="https://img.shields.io/github/last-commit/KahaanGandhi/Chamaeleon-MCMC" alt="Last Commit">
   <img src="https://img.shields.io/github/languages/code-size/KahaanGandhi/Chamaeleon-MCMC" alt="Code Size">
-  <img src="https://img.shields.io/github/languages/top/KahaanGandhi/Chamaeleon-MCMC" alt="Top Language">
 </p>
 
 Spectroscopic observations enable studies of the chemical composition of star-forming regions based on their distinct molecular emission and absorption spectra. The difficulty of detecting complex organic molecules, which probe chemical complexity, scales with their size — emission from heavy molecules is distributed over many lines, often too weak to detect individually. To address this, MCMC algorithms fit spectral models to sparse spectra, enabling molecular detection through multi-transition radio observations.
