@@ -1,0 +1,1 @@
+This folder contains `.cat` files from the Cologne Database for Molecular Spectroscopy (CDMS) for relevant molecules. Additional `.cat` files can be added as needed. Molecule names should be entered exactly as they appear in the catalog file names.
