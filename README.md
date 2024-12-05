@@ -5,7 +5,7 @@
   <img src="https://img.shields.io/github/languages/code-size/KahaanGandhi/Chamaeleon-MCMC" alt="Code Size">
 </p>
 
-Spectroscopic observations enable studies of the chemical composition of star-forming regions based on their distinct molecular emission and absorption spectra. The difficulty of detecting complex organic molecules, which probe chemical complexity, scales with their size — emission from heavy molecules is distributed over many lines, often too weak to detect individually. To address this, MCMC algorithms fit spectral models to sparse spectra, enabling molecular detection through multi-transition radio observations.
+Spectroscopic observations enable studies of the chemical composition of star-forming regions based on their distinct molecular emission and absorption spectra. The difficulty of detecting complex organic molecules, which probe chemical complexity, scales with their size — emission from heavy molecules is distributed over many lines, often too weak to detect individually. To address this, Markov Chain Monte Carlo (MCMC) algorithms fit spectral models to sparse spectra, enabling molecular detection through multi-transition radio observations.
 
 Contents include:
 - `inference.py`: Main MCMC script; follow instructions below to run it.

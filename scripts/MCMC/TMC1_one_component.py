@@ -1,11 +1,11 @@
-# -----------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------
 # Developer: Kahaan Gandhi
 # Based on methodologies described in:
 # Loomis, R.A. et al., Nat Astron 5, 188–196 (2021), DOI: 10.1038/s41550-020-01261-4
 # Simplifying assumption that TMC-1 GOTHAM spectra has one velocity component.
 
 # Note: This script is outdated and may require updates to align with recent repository changes.
-# -----------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------
 
 import numpy as np
 import emcee

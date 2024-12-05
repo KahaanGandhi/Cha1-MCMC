@@ -624,9 +624,9 @@ if __name__ == "__main__":
         # Usually unchanged unless paths or setup are modified
         'block_interlopers': True,          # Recommended True to block interloping lines
         'parallelize':       True,          # True for multiprocessing (faster); False for easier debugging
-        'fit_folder':        os.path.join(os.getcwd(), 'MLE_DSN_fit_results'),
+        'fit_folder':        os.path.join(os.getcwd(), 'results'),
         'cat_folder':        os.path.join(os.getcwd(), 'catalog'),
-        'prior_path':        os.path.join(os.getcwd(), 'MLE_DSN_fit_results', 'hc5n_hfs', 'chain_template.npy'),
+        'prior_path':        os.path.join(os.getcwd(), 'results', 'hc5n_hfs', 'chain_template.npy'),
         'data_paths': {
             # 'hc5n_hfs':      os.path.join(os.getcwd(), 'data', 'DSN', 'cha_c2_hc5n_rereduced.npy'),
             'hc5n_hfs':      os.path.join(os.getcwd(), 'data', 'DSN', 'cha_mms1_hc5n_rereduced.npy'),
