@@ -406,14 +406,6 @@ class SpectralFitMCMC:
             percentile_16 = np.percentile(psamples, 16, axis=1).mean(axis=1)
             percentile_84 = np.percentile(psamples, 84, axis=1).mean(axis=1)
             prior_stds = np.abs((percentile_16 - prior_means + percentile_84 - prior_means) / 2.0)
-            
-            # nwalkers, nsteps, ndim_prior = prior_chain.shape
-            # burn_in = int(0.2 * nsteps)
-            # samples = prior_chain[:, burn_in:, :].reshape(-1, ndim_prior).T  # Shape: (ndim, n_samples)
-            # prior_means = np.percentile(samples, 50, axis=1)
-            # percentile_16 = np.percentile(samples, 16, axis=1)
-            # percentile_84 = np.percentile(samples, 84, axis=1)
-            # prior_stds = (percentile_84 - percentile_16) / 2.0
 
             # For parameters except Ncol, use the 50th percentile values
             if self.source_size is not None:
