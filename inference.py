@@ -451,7 +451,6 @@ class SpectralFitMCMC:
         pos = np.array(pos)
 
         print(f"{GRAY}Failed walker initalizations: {self.nwalkers - count}{RESET}\n")
-        # exit()
         
         # Perform affine invariant MCMC sampling
         if self.parallelize:
