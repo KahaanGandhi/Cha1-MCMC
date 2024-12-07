@@ -361,7 +361,7 @@ class SpectralFitMCMC:
         # Ncol_initial = 1e12  # Starting value for Ncol
         Ncol_bounds = (self.bounds['Ncol'][0], self.bounds['Ncol'][1])
 
-        # Use minimize_scalar to find the Ncol that minimizes the negative log-likelihood
+        # Find Ncol that minimizes negative log-likelihood
         try:
             result = opt.minimize_scalar(nll, bounds=Ncol_bounds, method='bounded', options={'xatol':1e-6})
             if result.success:
@@ -375,7 +375,7 @@ class SpectralFitMCMC:
             print(f"{RED}MLE for Ncol encountered an error: {e}{RESET}")
             raise
 
-    # Conduct Markov Chain Monte Carlo (MCMC) inference using emcee's ensemble sampler
+    # Perform Markov Chain Monte Carlo (MCMC) inference using emcee's ensemble sampler
     def fit_multi_gaussian(self, datafile, catalogue):
         print(f"{CYAN}Estimating free parameters for {self.mol_name}.{RESET}")
         ndim = self.ndim
@@ -386,7 +386,7 @@ class SpectralFitMCMC:
 
         # Choose initial parameters and perturbations based on run type
         if self.template_run:
-            # Use the configurable template means and standard deviations
+            # Use template means and standard deviations
             initial = self.template_means
             prior_means = initial
             prior_stds = self.template_stds
@@ -407,7 +407,7 @@ class SpectralFitMCMC:
             percentile_84 = np.percentile(psamples, 84, axis=1).mean(axis=1)
             prior_stds = np.abs((percentile_16 - prior_means + percentile_84 - prior_means) / 2.0)
 
-            # For parameters except Ncol, use the 50th percentile values
+            # For parameters except Ncol, use 50th percentile values
             if self.source_size is not None:
                 Ncol_initial = None
                 initial = prior_means.copy()
