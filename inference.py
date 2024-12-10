@@ -341,7 +341,7 @@ class SpectralFitMCMC:
 
         return datafile_path, catfile_path
 
-    # Estimate Ncol via Maximum Likelihood Estimation (MLE), holding other parameters fixed
+    # Estimate Ncol via maximum likelihood estimation (MLE), holding other parameters fixed
     def estimate_Ncol_via_MLE(self, datagrid, mol_cat, fixed_params):
         # Unpack fixed parameters
         if self.source_size is not None:

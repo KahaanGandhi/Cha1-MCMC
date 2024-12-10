@@ -50,7 +50,7 @@ pip install -r requirements.txt
 - **Observation parameters**: Adjust parameters like `dish_size`, `lower_limit`, and `upper_limit` to match your telescope and source. Ensure that your molecule has rotational transitions that fall in the specified frequency range. The current configuration is for DSS-43 observations of Chamaeleon I. 
 - **Source size and column density**:
   - Source size is highly covariant with column density; in cases where source size can be estimated through other means, fixing it can better constrain column density. If unknown, it will be a free parameter.
-  - Column density is initialized via Maximum Likelihood Estimation (MLE) by default, supporting both fixed and variable source sizes.
+  - Column density is initialized via maximum likelihood estimation (MLE) by default, supporting both fixed and variable source sizes.
 - **Exploring sample space**: Increase `nwalkers` for broader exploration, especially if the parameter space is large or multimodal. Increase `nruns` (number of MCMC steps) to improve convergence and precision. As a rule of thumb, more walkers help with complex models, while more steps refine results in well-defined spaces. Look for signs like poor convergence or incomplete exploration to decide which to adjust.
 
 ### Step 3: Initial MCMC Sampling
